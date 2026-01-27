@@ -108,25 +108,62 @@ export default function SocialFeed() {
 
     const handlePost = async () => {
         if (!input.trim() && !selectedImage || isPosting) return;
+
+        // Validar que el usuario está logueado
+        if (!userProfile?.id) {
+            alert('Debes iniciar sesión para publicar.');
+            return;
+        }
+
         setIsPosting(true);
 
         try {
             let imageUrl = null;
             if (selectedImage) {
-                const res = await uploadToCloudinary(selectedImage);
-                imageUrl = res.secure_url;
+                try {
+                    const res = await uploadToCloudinary(selectedImage);
+                    imageUrl = res.secure_url;
+                } catch (uploadErr) {
+                    console.error('Error uploading image:', uploadErr);
+                    // Continue without image
+                }
             }
 
-            const { error } = await supabase
+            console.log('Posting with user_id:', userProfile.id);
+
+            const { data, error } = await supabase
                 .from('posts')
                 .insert({
-                    user_id: userProfile?.id,
+                    user_id: userProfile.id,
                     content: input,
                     media_url: imageUrl,
                     created_at: new Date().toISOString()
-                });
+                })
+                .select();
 
-            if (error) throw error;
+            if (error) {
+                console.error('Supabase error:', error);
+                throw error;
+            }
+
+            console.log('Post created:', data);
+
+            // Add to local state immediately for instant feedback
+            if (data && data[0]) {
+                const newPost = {
+                    id: data[0].id,
+                    userId: userProfile.id,
+                    user: userProfile.name || userProfile.email?.split('@')[0] || 'Usuario',
+                    avatar: userProfile.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
+                    content: input,
+                    image: imageUrl,
+                    time: 'Ahora',
+                    likes: 0,
+                    comments: 0,
+                    isLiked: false
+                };
+                setPosts(prev => [newPost, ...prev]);
+            }
 
             setInput('');
             setSelectedImage(null);
@@ -135,7 +172,7 @@ export default function SocialFeed() {
             }
         } catch (error) {
             console.error('Error posting:', error);
-            alert('¡Vaya! No pudimos realizar la publicación. Intenta de nuevo en un momento.');
+            alert(`Error: ${error.message || 'No se pudo publicar. Verifica que las tablas existan en Supabase.'}`);
         } finally {
             setIsPosting(false);
         }

@@ -7,10 +7,10 @@ import { getProducts } from '../services/shopify';
 export default function AIAssistant({ isFullScreen = false }) {
     const [isOpen, setIsOpen] = useState(isFullScreen);
     const [messages, setMessages] = useState(() => {
-        const saved = localStorage.getItem('lucia-history');
+        const saved = localStorage.getItem('jarvis-history');
         if (saved) return JSON.parse(saved);
         return [
-            { role: 'assistant', content: '¡Hola! Soy Luc-IA. Pásate por tu Perfil si quieres ver tus deseos o buscar la lista de algún amigo.' }
+            { role: 'assistant', content: 'Hola. Soy JARVIS, tu asistente personal de JES Store. ¿En qué puedo ayudarte hoy?' }
         ];
     });
     const [input, setInput] = useState('');
@@ -20,7 +20,7 @@ export default function AIAssistant({ isFullScreen = false }) {
     const location = useLocation();
 
     useEffect(() => {
-        localStorage.setItem('lucia-history', JSON.stringify(messages));
+        localStorage.setItem('jarvis-history', JSON.stringify(messages));
     }, [messages]);
 
     useEffect(() => {
@@ -113,21 +113,22 @@ export default function AIAssistant({ isFullScreen = false }) {
             {/* Header Premium */}
             <div className="p-7 bg-black dark:bg-white text-white dark:text-black flex items-center justify-between shrink-0 transition-colors duration-300">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-zinc-800 dark:bg-zinc-100 rounded-2xl flex items-center justify-center text-xl shadow-inner border border-white/5 dark:border-black/5 shrink-0 transition-colors duration-300">💃</div>
+                    <div className="w-10 h-10 bg-blue-600 dark:bg-blue-600 rounded-2xl flex items-center justify-center text-xl shadow-inner border border-white/5 dark:border-black/5 shrink-0 transition-colors duration-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 8V4H8" />
+                            <rect width="16" height="12" x="4" y="8" rx="2" />
+                            <path d="M2 14h2" />
+                            <path d="M20 14h2" />
+                            <path d="M15 13v2" />
+                            <path d="M9 13v2" />
+                        </svg>
+                    </div>
                     <div className="min-w-0">
-                        <h3 className="text-white dark:text-black font-black uppercase tracking-tighter text-base md:text-lg leading-none truncate transition-colors duration-300">Luc-IA</h3>
-                        <p className="text-white/50 dark:text-black/50 text-[9px] md:text-[10px] font-bold uppercase tracking-widest mt-1 truncate transition-colors duration-300">Asistente Virtual Jes Store</p>
+                        <h3 className="text-white dark:text-black font-black uppercase tracking-tighter text-base md:text-lg leading-none truncate transition-colors duration-300">JARVIS</h3>
+                        <p className="text-white/50 dark:text-black/50 text-[9px] md:text-[10px] font-bold uppercase tracking-widest mt-1 truncate transition-colors duration-300">Asistente Virtual JES</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => window.dispatchEvent(new CustomEvent('open-search'))}
-                        className="p-2.5 bg-white/10 dark:bg-black/5 hover:bg-white/20 dark:hover:bg-black/10 text-white dark:text-black rounded-xl transition-all flex items-center gap-2"
-                        title="Buscar Productos"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
-                        <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest">Buscar</span>
-                    </button>
                     {!isFullScreen && (
                         <button
                             onClick={() => setIsOpen(false)}
@@ -189,7 +190,7 @@ export default function AIAssistant({ isFullScreen = false }) {
         </motion.div>
     );
 
-    if (location.pathname === '/lucia' && !isFullScreen) return null;
+    if (location.pathname === '/jarvis' && !isFullScreen) return null;
     if (isFullScreen) return chatContent;
 
     return (
