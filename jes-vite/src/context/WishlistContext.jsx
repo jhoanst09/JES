@@ -66,21 +66,21 @@ export function WishlistProvider({ children }) {
     useEffect(() => {
         if (!isLoggedIn || !session?.user?.id) return;
 
-        // Real-time listener for friendships (replaces old follow_requests)
+        // Real-time listener for friendships
         const channel = supabase
-            .channel(`realtime:friendships:${session.user.id}`)
+            .channel('realtime:friendships')
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
                 table: 'friendships'
-            }, (payload) => {
+            }, async (payload) => {
                 console.log('Friendship change detected:', payload);
-                // Si la relación involucra al usuario actual, refrescar datos
-                if (payload.new?.user_id === session.user.id ||
-                    payload.new?.friend_id === session.user.id ||
-                    payload.old?.user_id === session.user.id ||
-                    payload.old?.friend_id === session.user.id) {
-                    fetchUserData(session.user);
+                const { user_id, friend_id } = payload.new || payload.old || {};
+
+                // If the user is involved in this friendship change, refresh
+                if (user_id === session.user.id || friend_id === session.user.id) {
+                    console.log('Relevant friendship change for current user, refreshing...');
+                    await fetchUserData(session.user);
                 }
             })
             .subscribe();
@@ -410,7 +410,6 @@ export function WishlistProvider({ children }) {
 
                     fetchUserData(session.user);
                 }
-            } else {
                 // Check if there is already a pending request
                 const { data: existing, error: selectError } = await supabase
                     .from('friendships')
@@ -430,7 +429,7 @@ export function WishlistProvider({ children }) {
                             alert('Este usuario ya te envió una solicitud. Búscala en tu perfil.');
                         }
                     } else if (existing.status === 'accepted') {
-                        fetchUserData(session.user);
+                        await fetchUserData(session.user);
                     }
                     return;
                 }
@@ -438,6 +437,9 @@ export function WishlistProvider({ children }) {
                 console.log('Sending new friend request to:', friendId);
                 await sendFollowRequest(friendId);
             }
+        } catch (err) {
+            console.error('Error in toggleFollow:', err);
+            alert('Vaya, algo salió mal al intentar seguir a este usuario.');
         } finally {
             setSocialLoading(prev => ({ ...prev, [friendId]: false }));
         }
