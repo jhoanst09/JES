@@ -1,4 +1,7 @@
-import { motion } from 'framer-motion';
+import { useRef, useEffect } from 'react';
+import { supabase } from '../services/supabase';
+import { uploadToCloudinary } from '../services/cloudinary';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { useWishlist } from '../context/WishlistContext';
 import { Link } from 'react-router-dom';
@@ -41,28 +44,46 @@ export default function SocialFeed() {
 
     useEffect(() => {
         const fetchPosts = async () => {
-            const { data, error } = await supabase
+            // 1. Fetch Posts
+            const { data: postsData, error: postsError } = await supabase
                 .from('posts')
                 .select('*, profiles(name, avatar_url)')
                 .order('created_at', { ascending: false });
 
-            if (!error && data) {
-                const formatted = data.map(p => ({
-                    id: p.id,
-                    userId: p.user_id,
-                    user: p.profiles?.name || 'anon',
-                    avatar: p.profiles?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
-                    content: p.content,
-                    image: p.media_url,
-                    time: new Date(p.created_at).toLocaleDateString(),
-                    likes: p.likes_count || 0,
-                    comments: p.comments_count || 0,
-                    isLiked: false // Logic for personal likes can be added later with a 'likes' table
-                }));
-                setPosts(formatted);
-            } else {
+            if (postsError) {
+                console.error('Error fetching posts:', postsError);
                 setPosts(MOCK_POSTS);
+                return;
             }
+
+            // 2. Fetch User Likes if logged in
+            let userLikedPostIds = new Set();
+            if (isLoggedIn && userProfile?.id) {
+                const { data: likesData } = await supabase
+                    .from('post_likes')
+                    .select('post_id')
+                    .eq('user_id', userProfile.id);
+
+                if (likesData) {
+                    userLikedPostIds = new Set(likesData.map(l => l.post_id));
+                }
+            }
+
+            // 3. Format with isLiked status
+            const formatted = postsData.map(p => ({
+                id: p.id,
+                userId: p.user_id,
+                user: p.profiles?.name || 'anon',
+                avatar: p.profiles?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
+                content: p.content,
+                image: p.media_url,
+                time: new Date(p.created_at).toLocaleDateString(),
+                likes: p.likes_count || 0,
+                comments: p.comments_count || 0,
+                isLiked: userLikedPostIds.has(p.id)
+            }));
+
+            setPosts(formatted);
         };
 
         fetchPosts();
@@ -78,6 +99,13 @@ export default function SocialFeed() {
         return () => supabase.removeChannel(channel);
     }, []);
 
+    const handleImageSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setSelectedImage(file);
+        }
+    };
+
     const handlePost = async () => {
         if (!input.trim() && !selectedImage || isPosting) return;
         setIsPosting(true);
@@ -85,8 +113,6 @@ export default function SocialFeed() {
         try {
             let imageUrl = null;
             if (selectedImage) {
-                // If the user hasn't set up Cloudinary yet, it will fail, so we might need a fallback or just alert.
-                // Assuming it's already integrated as per previous phases.
                 const res = await uploadToCloudinary(selectedImage);
                 imageUrl = res.secure_url;
             }
@@ -109,43 +135,62 @@ export default function SocialFeed() {
             }
         } catch (error) {
             console.error('Error posting:', error);
-            alert('¡Vaya! No pudimos realizar la publicación. ¿Ya configuraste la tabla "posts" en Supabase?');
+            alert('¡Vaya! No pudimos realizar la publicación. Intenta de nuevo en un momento.');
         } finally {
             setIsPosting(false);
         }
     };
 
-    const toggleLike = (postId) => {
-        const updated = posts.map(post => {
-            if (post.id === postId) {
-                const isLiked = post.isLiked;
-                return {
-                    ...post,
-                    likes: isLiked ? post.likes - 1 : post.likes + 1,
-                    isLiked: !isLiked
-                };
+    const toggleLike = async (postId) => {
+        if (!isLoggedIn) {
+            alert('¡Oye! Inicia sesión para dar like.');
+            return;
+        }
+
+        const post = posts.find(p => p.id === postId);
+        const isLiked = post.isLiked;
+
+        // Optimistic UI
+        setPosts(prev => prev.map(p =>
+            p.id === postId ? { ...p, likes: isLiked ? p.likes - 1 : p.likes + 1, isLiked: !isLiked } : p
+        ));
+
+        try {
+            if (isLiked) {
+                await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', userProfile?.id);
+            } else {
+                await supabase.from('post_likes').insert({ post_id: postId, user_id: userProfile?.id });
             }
-            return post;
-        });
-        setPosts(updated);
-        localStorage.setItem('jes-social-posts-v2', JSON.stringify(updated));
+        } catch (error) {
+            console.error('Error toggling like:', error);
+        }
     };
 
-    const handleComment = (postId) => {
-        if (!commentInput.trim()) return;
-        const updated = posts.map(post => {
-            if (post.id === postId) {
-                return {
-                    ...post,
-                    comments: (post.comments || 0) + 1
-                };
-            }
-            return post;
-        });
-        setPosts(updated);
-        localStorage.setItem('jes-social-posts-v2', JSON.stringify(updated));
+    const handleComment = async (postId) => {
+        if (!commentInput.trim() || !isLoggedIn) return;
+
+        const content = commentInput;
         setCommentInput('');
         setCommentingOn(null);
+
+        // Optimistic UI
+        setPosts(prev => prev.map(p =>
+            p.id === postId ? { ...p, comments: (p.comments || 0) + 1 } : p
+        ));
+
+        try {
+            const { error } = await supabase
+                .from('post_comments')
+                .insert({
+                    post_id: postId,
+                    user_id: userProfile?.id,
+                    content: content
+                });
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error commenting:', error);
+            alert('No pudimos enviar tu comentario.');
+        }
     };
 
     return (
@@ -238,7 +283,7 @@ export default function SocialFeed() {
                                         <img src={post.avatar} className="w-full h-full object-cover" alt="" />
                                     </div>
                                     <div>
-                                        <h4 className="font-black text-zinc-900 dark:text-white lowercase group-hover/avatar:text-blue-500 transition-colors">@{post.user}</h4>
+                                        <h4 className="font-black text-zinc-900 dark:text-white lowercase group-hover/avatar:text-blue-500 transition-colors">@{post.user?.name || post.user}</h4>
                                         <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{post.time}</p>
                                     </div>
                                 </Link>

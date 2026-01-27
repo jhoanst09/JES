@@ -69,7 +69,7 @@ export default function Community() {
                         La <span className="text-orange-500">Comunidad</span>
                     </h1>
                     <p className="text-zinc-500 text-sm md:text-lg uppercase tracking-[0.4em] font-black">
-                        Conecta con la gente de Jes Store
+                        Conecta con tus amigos en Jes Store
                     </p>
                 </header>
 

@@ -434,7 +434,7 @@ export default function Profile() {
                             onClick={() => setActiveTab(tab)}
                             className={`text-[10px] md:text-xs font-black uppercase tracking-[0.2em] relative py-3 px-6 rounded-2xl transition-all whitespace-nowrap z-10 ${activeTab === tab ? 'text-white dark:text-black' : 'text-zinc-500 hover:text-black dark:hover:text-zinc-300 bg-zinc-100 dark:bg-white/5'}`}
                         >
-                            {tab === 'wishlist' ? 'Mis Deseos' : tab === 'orders' ? 'Mis Compras' : tab === 'social' ? 'Mis Amigos' : 'Comunidad'}
+                            {tab === 'wishlist' ? 'Mis Deseos' : tab === 'orders' ? 'Mis Compras' : tab === 'social' ? 'Amigos' : 'Comunidad'}
                             {activeTab === tab && (
                                 <motion.div
                                     layoutId="activeTab"
@@ -582,6 +582,11 @@ export default function Profile() {
                                                 <button onClick={() => setActiveTab('plaza')} className="mt-4 text-blue-500 font-black uppercase text-[10px] hover:underline">Ir a la Comunidad</button>
                                             </div>
                                         )}
+                                    </div>
+                                    <div className="pt-8">
+                                        <button className="px-6 py-3 bg-zinc-100 dark:bg-zinc-900 border border-black/5 dark:border-white/5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2 hover:bg-black hover:text-white transition-all">
+                                            <span>💬</span> Mensajería (Próximamente)
+                                        </button>
                                     </div>
                                 </div>
                             </div>
