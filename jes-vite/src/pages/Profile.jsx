@@ -42,11 +42,18 @@ export default function Profile() {
     useEffect(() => {
         // Fetch real users from DB for discovery
         async function fetchUsers() {
-            const { data } = await supabase.from('profiles').select('*').limit(10);
+            let query = supabase.from('profiles').select('*').limit(20);
+
+            // Excluirme a mí mismo de la lista de descubrimiento
+            if (userProfile?.id) {
+                query = query.neq('id', userProfile.id);
+            }
+
+            const { data } = await query;
             if (data) setOtherUsers(data);
         }
         fetchUsers();
-    }, []);
+    }, [userProfile?.id]);
 
     const handleSaveProfile = async () => {
         await updateProfile({
@@ -94,12 +101,17 @@ export default function Profile() {
         const query = e.target.value;
         setSearchQuery(query);
         if (query.trim().length > 0) {
-            const { data } = await supabase
+            let sQuery = supabase
                 .from('profiles')
                 .select('*')
-                .ilike('name', `%${query}%`)
-                .limit(10);
-            setSearchResults(data || []);
+                .ilike('name', `%${query}%`);
+
+            if (userProfile?.id) {
+                sQuery = sQuery.neq('id', userProfile.id);
+            }
+
+            const { data } = await sQuery.limit(20);
+            if (data) setSearchResults(data);
         } else {
             setSearchResults([]);
         }

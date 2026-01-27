@@ -52,6 +52,15 @@ export default function Wishlist() {
                     if (profile) {
                         setOwnerProfile(profile);
                         setRequesterName(profile.name || 'Invitado');
+
+                        // Fetch friend count for this profile
+                        const { count } = await supabase
+                            .from('friendships')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('status', 'accepted')
+                            .or(`user_id.eq.${sharedUserId},friend_id.eq.${sharedUserId}`);
+
+                        setOwnerProfile(prev => ({ ...prev, friendCount: count || 0 }));
                     } else {
                         setRequesterName('Usuario no encontrado');
                     }
@@ -181,6 +190,11 @@ export default function Wishlist() {
                                 {ownerProfile?.city && (
                                     <span className="px-5 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-2xl text-[10px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400 border border-black/5 dark:border-white/5 shadow-sm">
                                         📍 {ownerProfile.city}
+                                    </span>
+                                )}
+                                {isSharedView && ownerProfile?.friendCount !== undefined && (
+                                    <span className="px-5 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-2xl text-[10px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-400 border border-black/5 dark:border-white/5 shadow-sm">
+                                        👥 {ownerProfile.friendCount} Amigos
                                     </span>
                                 )}
                                 <span className="px-5 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-2xl text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 border border-blue-500/10 shadow-sm">
