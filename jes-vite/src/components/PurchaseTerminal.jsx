@@ -2,14 +2,15 @@ import { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCart } from '../context/CartContext';
 import { getProducts } from '../services/shopify';
+import { chatWithAI } from '../services/ai';
 import Fuse from 'fuse.js';
 
 export default function PurchaseTerminal({ isOpen, onClose, product }) {
     const [history, setHistory] = useState([
-        { text: 'JES STORE - PURCHASE TERMINAL v1.0.4', type: 'system' },
+        { text: 'JES STORE - TERMINAL v1.0.4', type: 'system' },
         { text: 'Conectando con la bodega central...', type: 'system' },
         { text: 'ESTADO: ONLINE', type: 'success' },
-        { text: 'Escribe "help" para ver los comandos disponibles.', type: 'info' }
+        { text: 'Escribe "help" para ver comandos o "jarvis" para hablar con la IA.', type: 'info' }
     ]);
     const [input, setInput] = useState('');
     const inputRef = useRef(null);
@@ -30,6 +31,8 @@ export default function PurchaseTerminal({ isOpen, onClose, product }) {
 
     const [pendingAction, setPendingAction] = useState(null);
     const [suggestedProduct, setSuggestedProduct] = useState(null);
+    const [jarvisMode, setJarvisMode] = useState(false);
+    const [jarvisHistory, setJarvisHistory] = useState([]);
 
     const handleCommand = async (e) => {
         if (e.key === 'Enter') {
@@ -60,12 +63,26 @@ export default function PurchaseTerminal({ isOpen, onClose, product }) {
 
             if (cmdText === 'help') {
                 newHistory.push({ text: 'COMANDOS DISPONIBLES:', type: 'info' });
+                newHistory.push({ text: '  jarvis         - Activar modo JARVIS (IA)', type: 'success' });
                 newHistory.push({ text: '  search <query> - Buscar productos y añadir al carrito', type: 'info' });
                 newHistory.push({ text: '  buy            - Comprar producto actual (si hay uno activo)', type: 'info' });
                 newHistory.push({ text: '  stats          - Estadísticas del sistema', type: 'info' });
                 newHistory.push({ text: '  scan           - Escanear vulnerabilidades de ofertas', type: 'info' });
                 newHistory.push({ text: '  clear          - Limpiar la consola', type: 'info' });
                 newHistory.push({ text: '  exit           - Cerrar terminal', type: 'info' });
+            } else if (cmdText === 'jarvis') {
+                setJarvisMode(true);
+                setJarvisHistory([]);
+                newHistory.push({ text: '', type: 'system' });
+                newHistory.push({ text: '╔════════════════════════════════════════════════════════╗', type: 'success' });
+                newHistory.push({ text: '║         J.A.R.V.I.S. INTERFACE ACTIVATED              ║', type: 'success' });
+                newHistory.push({ text: '║   Just A Rather Very Intelligent System               ║', type: 'success' });
+                newHistory.push({ text: '╚════════════════════════════════════════════════════════╝', type: 'success' });
+                newHistory.push({ text: '', type: 'system' });
+                newHistory.push({ text: 'Hola. Soy JARVIS, tu asistente personal de JES Store.', type: 'info' });
+                newHistory.push({ text: 'Puedo ayudarte a encontrar productos, responder preguntas', type: 'info' });
+                newHistory.push({ text: 'o simplemente conversar. Escribe "exit" para salir del modo JARVIS.', type: 'info' });
+                newHistory.push({ text: '', type: 'system' });
             } else if (cmdText.startsWith('search ')) {
                 const query = cmdText.replace('search ', '').trim();
                 newHistory.push({ text: `Buscando "${query}" en los servidores de Shopify...`, type: 'system' });
@@ -130,7 +147,38 @@ export default function PurchaseTerminal({ isOpen, onClose, product }) {
                 setInput('');
                 return;
             } else if (cmdText === 'exit') {
-                onClose();
+                if (jarvisMode) {
+                    setJarvisMode(false);
+                    newHistory.push({ text: 'JARVIS desactivado. Volviendo al modo terminal.', type: 'system' });
+                } else {
+                    onClose();
+                    return;
+                }
+            } else if (jarvisMode && cmdText !== '') {
+                // JARVIS Mode - Send to AI
+                newHistory.push({ text: 'JARVIS > Procesando...', type: 'info' });
+                setHistory(newHistory);
+                setInput('');
+
+                try {
+                    const newJarvisHistory = [...jarvisHistory, { role: 'user', content: input }];
+                    const response = await chatWithAI(newJarvisHistory);
+                    setJarvisHistory([...newJarvisHistory, { role: 'assistant', content: response }]);
+
+                    // Split response into lines for terminal display
+                    const lines = response.split('\n').filter(l => l.trim());
+                    setHistory(prev => [
+                        ...prev.filter(h => h.text !== 'JARVIS > Procesando...'),
+                        { text: 'JARVIS:', type: 'success' },
+                        ...lines.map(line => ({ text: `  ${line}`, type: 'info' })),
+                        { text: '', type: 'system' }
+                    ]);
+                } catch (err) {
+                    setHistory(prev => [
+                        ...prev.filter(h => h.text !== 'JARVIS > Procesando...'),
+                        { text: '[ERROR] No se pudo conectar con JARVIS.', type: 'error' }
+                    ]);
+                }
                 return;
             } else if (cmdText !== '') {
                 newHistory.push({ text: `Error: Comando desconocido. Escribe "help".`, type: 'error' });

@@ -48,18 +48,20 @@ export default function ProductCard({ emoji, nombre, precio, image, handle, clas
                     )}
 
                     {/* Hover Buttons */}
-                    <div className="absolute inset-x-0 bottom-4 px-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute inset-x-0 bottom-4 px-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity justify-center">
                         <button
                             onClick={handleAddToCart}
-                            className="flex-1 py-2.5 bg-white dark:bg-zinc-800 text-black dark:text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all hover:bg-blue-600 hover:text-white border border-black/10 dark:border-white/10"
+                            className="w-12 h-12 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-white rounded-full text-xl flex items-center justify-center transition-all hover:bg-blue-600 hover:text-white border border-black/10 dark:border-white/10 shadow-lg hover:scale-110 active:scale-95"
+                            title="Añadir al carrito"
                         >
-                            🛒 Carrito
+                            🛒
                         </button>
                         <button
                             onClick={handleGiftClick}
-                            className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all hover:bg-blue-700"
+                            className="w-12 h-12 bg-blue-600 text-white rounded-full text-xl flex items-center justify-center transition-all hover:bg-blue-700 shadow-lg hover:scale-110 active:scale-95"
+                            title="Regalar a un amigo"
                         >
-                            🎁 Regalar
+                            🎁
                         </button>
                     </div>
                 </div>

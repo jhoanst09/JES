@@ -274,7 +274,7 @@ export default function SocialFeed() {
                         initial={{ opacity: 0, y: 20 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
-                        className="bg-zinc-50 dark:bg-zinc-900 border border-black/5 dark:border-white/10 rounded-[40px] overflow-hidden shadow-sm"
+                        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-[40px] overflow-hidden shadow-sm"
                     >
                         <div className="p-6">
                             <div className="flex justify-between items-start mb-4">
@@ -303,21 +303,21 @@ export default function SocialFeed() {
                             <div className="flex gap-8 border-t border-black/5 dark:border-white/5 pt-4">
                                 <button
                                     onClick={() => toggleLike(post.id)}
-                                    className={`flex items-center gap-2 transition-all active:scale-125 ${post.isLiked ? 'text-red-500' : 'text-zinc-500 hover:text-red-500'}`}
+                                    className={`flex items-center gap-2 transition-all active:scale-125 ${post.isLiked ? 'text-red-500' : 'text-zinc-600 dark:text-zinc-500 hover:text-red-500'}`}
                                 >
                                     {post.isLiked ? (
                                         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-red-500"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
                                     ) : (
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500 group-hover:text-red-500 transition-colors"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
                                     )}
-                                    <span className="text-xs font-black">{post.likes}</span>
+                                    <span className="text-xs font-black text-zinc-700 dark:text-zinc-300">{post.likes}</span>
                                 </button>
                                 <button
                                     onClick={() => setCommentingOn(commentingOn === post.id ? null : post.id)}
-                                    className="flex items-center gap-2 text-zinc-500 hover:text-blue-500 transition-all"
+                                    className="flex items-center gap-2 text-zinc-600 dark:text-zinc-500 hover:text-blue-500 transition-all"
                                 >
                                     <span className="text-xl">💬</span>
-                                    <span className="text-xs font-black">{post.comments}</span>
+                                    <span className="text-xs font-black text-zinc-700 dark:text-zinc-300">{post.comments}</span>
                                 </button>
                                 <button className="flex items-center gap-2 text-zinc-500 hover:text-green-500 transition-colors ml-auto">
                                     <span className="text-xl">🔗</span>
@@ -341,7 +341,7 @@ export default function SocialFeed() {
                                                 value={commentInput}
                                                 onChange={(e) => setCommentInput(e.target.value)}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id)}
-                                                className="flex-1 bg-white dark:bg-zinc-800 border border-black/5 dark:border-white/10 rounded-xl px-4 py-2 text-xs outline-none focus:border-blue-500 transition-all font-medium"
+                                                className="flex-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-2 text-sm text-zinc-900 dark:text-white outline-none focus:border-blue-500 transition-all font-medium placeholder:text-zinc-500"
                                             />
                                             <button
                                                 onClick={() => handleComment(post.id)}
