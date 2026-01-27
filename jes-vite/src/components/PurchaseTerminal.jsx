@@ -15,7 +15,7 @@ export default function PurchaseTerminal({ isOpen, onClose, product }) {
     const [input, setInput] = useState('');
     const inputRef = useRef(null);
     const scrollRef = useRef(null);
-    const { addToCart } = useCart();
+    const { addToCart, removeFromCart } = useCart();
 
     useEffect(() => {
         if (isOpen && inputRef.current) {
@@ -161,12 +161,43 @@ export default function PurchaseTerminal({ isOpen, onClose, product }) {
                 setInput('');
 
                 try {
+                    // Fetch products for context
+                    const allProducts = await getProducts(50);
                     const newJarvisHistory = [...jarvisHistory, { role: 'user', content: input }];
-                    const response = await chatWithAI(newJarvisHistory);
+                    const response = await chatWithAI(newJarvisHistory, allProducts);
                     setJarvisHistory([...newJarvisHistory, { role: 'assistant', content: response }]);
 
+                    // Process JARVIS commands in response
+                    const addCartMatch = response.match(/\[ADD_CART:([^\]]+)\]/);
+                    const removeCartMatch = response.match(/\[REMOVE_CART:([^\]]+)\]/);
+
+                    if (addCartMatch) {
+                        const handle = addCartMatch[1];
+                        const productToAdd = allProducts.find(p => p.handle === handle);
+                        if (productToAdd) {
+                            addToCart({
+                                handle: productToAdd.handle,
+                                title: productToAdd.title,
+                                price: productToAdd.price,
+                                image: productToAdd.image
+                            });
+                        }
+                    }
+
+                    if (removeCartMatch) {
+                        const handle = removeCartMatch[1];
+                        removeFromCart(handle);
+                    }
+
+                    // Clean response from commands for display
+                    const cleanResponse = response
+                        .replace(/\[ADD_CART:[^\]]+\]/g, '✅ Añadido al carrito')
+                        .replace(/\[REMOVE_CART:[^\]]+\]/g, '❌ Eliminado del carrito')
+                        .replace(/\[PRODUCT:[^\]]+\]/g, '')
+                        .replace(/\[SEARCH:[^\]]+\]/g, '');
+
                     // Split response into lines for terminal display
-                    const lines = response.split('\n').filter(l => l.trim());
+                    const lines = cleanResponse.split('\n').filter(l => l.trim());
                     setHistory(prev => [
                         ...prev.filter(h => h.text !== 'JARVIS > Procesando...'),
                         { text: 'JARVIS:', type: 'success' },
