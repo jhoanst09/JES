@@ -35,7 +35,7 @@ export default function MusicSection() {
     }, []);
 
     return (
-        <section id="musica" className="py-24 relative overflow-hidden bg-black">
+        <section id="musica" className="py-24 relative overflow-hidden bg-white dark:bg-black transition-colors duration-300">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-orange-600/10 blur-[150px] rounded-full -z-10 animate-pulse"></div>
 
             <div className="max-w-[1200px] mx-auto px-6">

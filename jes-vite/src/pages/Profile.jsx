@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useWishlist } from '../context/WishlistContext';
 import { supabase } from '../services/supabase';
 import { getCollectionProducts } from '../services/shopify';
@@ -10,7 +10,8 @@ import Footer from '../components/Footer';
 import MobileTabBar from '../components/MobileTabBar';
 
 export default function Profile() {
-    const { wishlist, userProfile, isLoggedIn, loading, login, signUp, loginWithGoogle, resetPassword, logout, togglePrivacy, updateProfile, toggleFollow, following, followRequests, sentFollowRequests, acceptFollowRequest, rejectFollowRequest, orders } = useWishlist();
+    const navigate = useNavigate();
+    const { wishlist, userProfile, isLoggedIn, loading, socialLoading, login, signUp, loginWithGoogle, resetPassword, logout, togglePrivacy, updateProfile, toggleFollow, following, followRequests, sentFollowRequests, acceptFollowRequest, rejectFollowRequest, orders } = useWishlist();
     const [activeTab, setActiveTab] = useState('wishlist');
     const [wishlistFilter, setWishlistFilter] = useState('public');
     const [isEditing, setIsEditing] = useState(false);
@@ -511,7 +512,7 @@ export default function Profile() {
                                         </h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {followRequests.map(req => (
-                                                <div key={req.id} className="bg-blue-500/5 border border-blue-500/20 p-4 rounded-[24px] flex items-center gap-4">
+                                                <div key={req.id} className="bg-blue-600/10 dark:bg-blue-500/5 border border-blue-500/30 dark:border-blue-500/20 p-6 rounded-[32px] flex items-center gap-6 shadow-xl">
                                                     <div className="w-10 h-10 bg-blue-100 rounded-full overflow-hidden shrink-0">
                                                         <img src={req.profiles.avatar_url || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" alt="" />
                                                     </div>
@@ -550,7 +551,7 @@ export default function Profile() {
                                                     initial={{ opacity: 0, x: -20 }}
                                                     animate={{ opacity: 1, x: 0 }}
                                                     transition={{ delay: idx * 0.05 }}
-                                                    onClick={() => window.location.href = `/wishlist?user=${user.id}`}
+                                                    onClick={() => navigate(`/wishlist?user=${user.id}`)}
                                                     className="group bg-zinc-100 dark:bg-zinc-900/50 border border-black/5 dark:border-white/5 p-6 rounded-[32px] flex items-center gap-6 hover:bg-black dark:hover:bg-white hover:border-black dark:hover:border-white transition-all cursor-pointer shadow-xl duration-500"
                                                 >
                                                     <div className="w-16 h-16 bg-zinc-200 dark:bg-zinc-800 rounded-2xl overflow-hidden flex-shrink-0 border border-black/10 dark:border-white/10 group-hover:border-white transition-all duration-300">
@@ -584,9 +585,12 @@ export default function Profile() {
                                         )}
                                     </div>
                                     <div className="pt-8">
-                                        <button className="px-6 py-3 bg-zinc-100 dark:bg-zinc-900 border border-black/5 dark:border-white/5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-zinc-500 flex items-center gap-2 hover:bg-black hover:text-white transition-all">
-                                            <span>💬</span> Mensajería (Próximamente)
-                                        </button>
+                                        <Link
+                                            to="/chat"
+                                            className="px-6 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg"
+                                        >
+                                            <span>💬</span> Abrir Mensajería
+                                        </Link>
                                     </div>
                                 </div>
                             </div>
@@ -752,10 +756,8 @@ export default function Profile() {
                                         key={user.id}
                                         layout
                                         whileHover={{ y: -4 }}
-                                        className="bg-zinc-50 dark:bg-zinc-900/30 border border-black/5 dark:border-white/5 p-6 md:p-8 rounded-[40px] flex items-center gap-4 md:gap-6 hover:bg-white dark:hover:bg-zinc-900 group transition-all duration-300 cursor-pointer shadow-sm relative overflow-hidden"
-                                        onClick={() => {
-                                            window.location.href = `/wishlist?user=${user.id}`;
-                                        }}
+                                        className="bg-zinc-100 dark:bg-zinc-900/30 border border-black/10 dark:border-white/10 p-6 md:p-8 rounded-[40px] flex items-center gap-4 md:gap-6 hover:bg-white dark:hover:bg-zinc-900 group transition-all duration-300 cursor-pointer shadow-sm relative overflow-hidden"
+                                        onClick={() => navigate(`/wishlist?user=${user.id}`)}
                                     >
                                         <div className="w-16 h-16 md:w-20 md:h-20 bg-white dark:bg-zinc-800 rounded-2xl md:rounded-[24px] flex items-center justify-center text-3xl md:text-4xl shadow-sm border border-black/5 dark:border-white/5 overflow-hidden shrink-0">
                                             {user.avatar_url ? (
@@ -776,7 +778,11 @@ export default function Profile() {
                                                 }}
                                                 className={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center transition-all shrink-0 ${following.includes(user.id) ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500' : 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'}`}
                                             >
-                                                {following.includes(user.id) ? '✓' : sentFollowRequests.includes(user.id) ? '⌛' : <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" x2="19" y1="8" y2="14" /><line x1="16" x2="22" y1="11" y2="11" /></svg>}
+                                                {socialLoading[user.id] ? (
+                                                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                ) : (
+                                                    following.includes(user.id) ? '✓' : sentFollowRequests.includes(user.id) ? '⌛' : <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" x2="19" y1="8" y2="14" /><line x1="16" x2="22" y1="11" y2="11" /></svg>
+                                                )}
                                             </button>
                                         </div>
                                     </motion.div>

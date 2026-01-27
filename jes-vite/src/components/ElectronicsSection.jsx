@@ -47,7 +47,7 @@ export default function ElectronicsSection() {
     const displayProducts = loading ? [] : products;
 
     return (
-        <section id="dispositivos" className="py-24 relative overflow-hidden bg-gradient-to-b from-black to-blue-950/10">
+        <section id="dispositivos" className="py-24 relative overflow-hidden bg-white dark:bg-black transition-colors duration-300">
             {/* Background Circuit Pattern Overlay */}
             <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'linear-gradient(90deg, #fff 1px, transparent 1px), linear-gradient(#fff 1px, transparent 1px)', backgroundSize: '100px 100px' }}></div>
 
@@ -57,7 +57,7 @@ export default function ElectronicsSection() {
                         initial={{ opacity: 0, y: 20 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
-                        className="text-5xl md:text-7xl font-black text-white font-bricolage mb-6 text-center"
+                        className="text-5xl md:text-7xl font-black text-zinc-900 dark:text-white font-bricolage mb-6 text-center transition-colors"
                     >
                         DISPOSITIVOS
                         <span className="block text-xl text-blue-500 font-bold uppercase tracking-[0.5em] mt-2">Tecnología de Punta</span>
@@ -73,11 +73,11 @@ export default function ElectronicsSection() {
                         <>
                             {displayProducts.length > 0 ? (
                                 <div>
-                                    <h3 className="text-2xl font-bold text-white mb-10 border-b border-white/10 pb-4">I. Catálogo Shopify</h3>
+                                    <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-10 border-b border-black/5 dark:border-white/10 pb-4 transition-colors">I. Catálogo Shopify</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                         {displayProducts.map((p, i) => (
                                             <div key={p.id} className="h-full">
-                                                <div className="bg-zinc-900/50 border border-white/5 rounded-[32px] h-full flex flex-col p-6">
+                                                <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-black/5 dark:border-white/5 rounded-[32px] h-full flex flex-col p-6 shadow-xl transition-colors">
                                                     <ProductCard
                                                         nombre={p.title}
                                                         precio={p.price}
@@ -99,12 +99,12 @@ export default function ElectronicsSection() {
                             {/* Vapers with Kitten Filter remains as a special placeholder */}
                             <div className="relative">
                                 <div className="flex items-center gap-4 mb-10">
-                                    <h3 className="text-2xl font-bold text-white border-b border-white/10 pb-4 flex-1">II. Vapor (+18)</h3>
+                                    <h3 className="text-2xl font-bold text-zinc-900 dark:text-white border-b border-black/5 dark:border-white/10 pb-4 flex-1 transition-colors">II. Vapor (+18)</h3>
                                     <div className="px-3 py-1 bg-yellow-500/20 text-yellow-500 text-[10px] font-bold rounded-full border border-yellow-500/20 uppercase tracking-tighter">
                                         Kitten Filter Activo 🐱
                                     </div>
                                 </div>
-                                <div className="w-full min-h-[300px] bg-zinc-900/30 border border-white/5 rounded-[32px] flex flex-col items-center justify-center">
+                                <div className="w-full min-h-[300px] bg-zinc-50 dark:bg-zinc-900/30 border border-black/5 dark:border-white/5 rounded-[32px] flex flex-col items-center justify-center transition-colors">
                                     <div className="text-center p-8">
                                         <span className="text-8xl mb-4 block">🐈</span>
                                         <p className="text-gray-400 max-w-sm mx-auto text-sm italic">

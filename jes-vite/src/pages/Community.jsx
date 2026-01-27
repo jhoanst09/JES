@@ -12,7 +12,7 @@ export default function Community() {
     const [pools, setPools] = useState([]);
     const [loading, setLoading] = useState(true);
     const [contributeLoading, setContributeLoading] = useState(null);
-    const { following, toggleFollow, isLoggedIn } = useWishlist();
+    const { following, toggleFollow, isLoggedIn, socialLoading } = useWishlist();
 
 
     useEffect(() => {
@@ -60,7 +60,7 @@ export default function Community() {
     };
 
     return (
-        <div className="min-h-screen text-white selection:bg-orange-500 selection:text-white">
+        <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white transition-colors duration-300 selection:bg-orange-500 selection:text-white">
             <Header />
 
             <main className="pt-32 pb-20 px-6 max-w-7xl mx-auto space-y-16">
@@ -134,16 +134,19 @@ export default function Community() {
                                             }}
                                             className={`flex-1 px-4 py-2 rounded-xl text-center font-bold text-xs uppercase tracking-widest transition-all ${following.includes(profile.id) ? 'bg-zinc-800 text-zinc-400 border border-white/5' : 'bg-orange-500 text-black shadow-lg shadow-orange-500/20'}`}
                                         >
-                                            {following.includes(profile.id) ? 'Siguiendo' : 'Seguir'}
+                                            {socialLoading[profile.id] ? (
+                                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mx-auto" />
+                                            ) : following.includes(profile.id) ? 'Siguiendo' : 'Seguir'}
                                         </button>
                                     </div>
                                 </div>
                             </motion.div>
                         ))
                     ) : (
-                        <div className="col-span-full py-20 text-center space-y-4">
-                            <h2 className="text-2xl font-black text-zinc-700 uppercase tracking-widest italic">La comunidad está vacía por ahora...</h2>
-                            <p className="text-zinc-800 font-bold uppercase text-[10px] tracking-[0.2em]">Sé el primero en mostrar tu estilo</p>
+                        <div className="col-span-full py-32 text-center space-y-6 bg-zinc-100 dark:bg-zinc-900/30 rounded-[64px] border border-dashed border-black/5 dark:border-white/10">
+                            <span className="text-8xl block mb-4 opacity-20 filter grayscale">🤝</span>
+                            <h2 className="text-3xl font-black text-zinc-400 dark:text-zinc-700 uppercase tracking-tighter italic">La comunidad está vacía por ahora...</h2>
+                            <p className="text-zinc-500 dark:text-zinc-500 font-bold uppercase text-[10px] tracking-[0.3em]">Sé el primero en mostrar su estilo</p>
                         </div>
                     )}
                 </div>

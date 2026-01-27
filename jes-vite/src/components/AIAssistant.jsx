@@ -87,7 +87,7 @@ export default function AIAssistant({ isFullScreen = false }) {
                                 <Link
                                     key={idx}
                                     to={`/product/${handle}`}
-                                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-black rounded-full font-bold text-[10px] hover:scale-105 active:scale-95 transition-all shadow-xl border border-black/5"
+                                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-50 dark:bg-white text-zinc-900 dark:text-black rounded-full font-bold text-[10px] hover:scale-105 active:scale-95 transition-all shadow-xl border border-black/5"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10" /><path d="M7 17 17 7" /></svg>
                                     Ver Producto

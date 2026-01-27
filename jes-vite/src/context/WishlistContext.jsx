@@ -1,15 +1,17 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { getProductsByHandles } from '../services/shopify';
 
 const WishlistContext = createContext();
 
 export function WishlistProvider({ children }) {
+    const isFetchingRef = useRef(false);
     const [wishlist, setWishlist] = useState([]);
     const [userProfile, setUserProfile] = useState({ name: 'Usuario', avatar: '👤', bio: '', avatar_url: null });
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [session, setSession] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [socialLoading, setSocialLoading] = useState({}); // { [userId]: boolean }
     const [following, setFollowing] = useState([]);
     const [followRequests, setFollowRequests] = useState([]);
     const [sentFollowRequests, setSentFollowRequests] = useState([]);
@@ -18,49 +20,68 @@ export function WishlistProvider({ children }) {
 
     // Initial Auth listener
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setIsLoggedIn(!!session);
-            if (session) fetchUserData(session.user);
-            setLoading(false);
-        });
+        let isMounted = true;
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session);
-            setIsLoggedIn(!!session);
-            if (session) {
-                fetchUserData(session.user);
+        const initAuth = async () => {
+            try {
+                const { data: { session: initialSession } } = await supabase.auth.getSession();
+                if (!isMounted) return;
+
+                setSession(initialSession);
+                setIsLoggedIn(!!initialSession);
+
+                if (initialSession) {
+                    await fetchUserData(initialSession.user);
+                }
+            } catch (err) {
+                console.error('Error during initial auth check:', err);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        };
+
+        initAuth();
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+            if (!isMounted) return;
+
+            setSession(newSession);
+            setIsLoggedIn(!!newSession);
+
+            if (newSession) {
+                await fetchUserData(newSession.user);
             } else {
                 setWishlist([]);
                 setUserProfile({ name: 'Usuario', avatar: '👤', bio: '' });
+                setLoading(false);
             }
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            isMounted = false;
+            subscription.unsubscribe();
+        };
     }, []);
 
     useEffect(() => {
         if (!isLoggedIn || !session?.user?.id) return;
 
-        // Real-time listener for follow requests
+        // Real-time listener for friendships (replaces old follow_requests)
         const channel = supabase
-            .channel(`realtime:follow_requests:${session.user.id}`)
+            .channel(`realtime:friendships:${session.user.id}`)
             .on('postgres_changes', {
-                event: 'INSERT',
+                event: '*',
                 schema: 'public',
-                table: 'follow_requests',
-                filter: `receiver_id=eq.${session.user.id}`
-            }, async (payload) => {
-                console.log('New follow request received:', payload);
-                // Fetch sender name
-                const { data: sender } = await supabase
-                    .from('profiles')
-                    .select('name')
-                    .eq('id', payload.new.sender_id)
-                    .single();
-
-                alert(`🔔 ¡Hola! ${sender?.name || 'Un usuario'} te envió una solicitud de amistad. Mírala en tu perfil.`);
-                fetchUserData(session.user);
+                table: 'friendships'
+            }, (payload) => {
+                console.log('Friendship change detected:', payload);
+                // Si la relación involucra al usuario actual, refrescar datos
+                if (payload.new?.user_id === session.user.id ||
+                    payload.new?.friend_id === session.user.id ||
+                    payload.old?.user_id === session.user.id ||
+                    payload.old?.friend_id === session.user.id) {
+                    fetchUserData(session.user);
+                }
             })
             .subscribe();
 
@@ -70,139 +91,132 @@ export function WishlistProvider({ children }) {
     }, [isLoggedIn, session?.user?.id]);
 
     async function fetchUserData(user) {
-        if (!user) return;
-        setLoading(true);
+        if (!user || isFetchingRef.current) return;
 
-        let profile = null;
-        let items = [];
-        let follows = [];
-        let requests = [];
-        let userOrders = [];
+        isFetchingRef.current = true;
+        if (!isLoggedIn) setLoading(true);
 
         try {
-            // 1. Fetch Profile
-            const { data: pData } = await supabase
+            // 1. Fetch Profile First
+            const { data: pData, error: pError } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('id', user.id)
                 .maybeSingle();
 
+            if (pError) console.warn('Error fetching profile:', pError);
+
             if (pData) {
-                profile = pData;
                 setUserProfile({
-                    ...profile,
-                    avatar: profile.avatar_url || '🌴',
-                    bio: profile.bio || ''
+                    ...pData,
+                    avatar: pData.avatar_url || '🌴',
+                    bio: pData.bio || ''
                 });
             } else {
+                // ... logic to create profile if it doesn't exist
                 const newProfile = {
                     id: user.id,
-                    name: user.email.split('@')[0],
+                    name: user.email?.split('@')[0] || 'Usuario',
                     avatar_url: null,
                     bio: '',
                     updated_at: new Date().toISOString()
                 };
                 const { data: created } = await supabase.from('profiles').insert(newProfile).select().maybeSingle();
-                if (created) setUserProfile({ ...created, avatar: '🌴' });
+                if (created) setUserProfile({ ...created, avatar: '🌴', bio: '' });
             }
 
-            // 2. Fetch Wishlist Items
-            const { data: wData } = await supabase
-                .from('wishlist_items')
-                .select('*')
-                .eq('user_id', user.id);
+            // 2. Fetch the rest in parallel
+            await Promise.allSettled([
+                fetchWishlist(user.id),
+                fetchFriendships(user.id),
+                fetchOrders(user.id)
+            ]);
 
-            if (wData) {
-                items = wData;
-                console.log('Wishlist items from DB:', items);
-                const handles = items.map(i => i.product_handle);
-                try {
-                    const products = await getProductsByHandles(handles);
-                    console.log('Products fetched from Shopify:', products);
-
-                    const enriched = items.map(dbItem => {
-                        const shopifyProduct = products.find(p => p.handle === dbItem.product_handle);
-                        if (shopifyProduct) {
-                            return { ...shopifyProduct, isPrivate: dbItem.is_private, db_id: dbItem.id };
-                        }
-                        // Fallback placeholder if Shopify product not found
-                        return {
-                            id: `missing-${dbItem.product_handle}`,
-                            handle: dbItem.product_handle,
-                            title: `Producto no disponible (${dbItem.product_handle})`,
-                            image: null,
-                            price: '---',
-                            isPrivate: dbItem.is_private,
-                            db_id: dbItem.id
-                        };
-                    });
-                    setWishlist(enriched);
-                } catch (shopifyErr) {
-                    console.error('Error enriching wishlist with Shopify:', shopifyErr);
-                    // Just set empty or map logic above
-                }
-            }
-
-            // 3. Fetch Following
-            const { data: fData } = await supabase
-                .from('friends')
-                .select('friend_id')
-                .eq('user_id', user.id);
-
-            if (fData) {
-                follows = fData;
-                setFollowing(follows.map(f => f.friend_id));
-
-                // Fetch full friend profiles for the gift modal
-                const friendIds = follows.map(f => f.friend_id);
-                if (friendIds.length > 0) {
-                    const { data: friendProfiles } = await supabase
-                        .from('profiles')
-                        .select('*')
-                        .in('id', friendIds);
-                    if (friendProfiles) {
-                        setFriends(friendProfiles);
-                    }
-                }
-            }
-
-            // 4. Fetch Orders
-            const { data: oData } = await supabase
-                .from('orders')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
-
-            if (oData) {
-                userOrders = oData;
-                setOrders(userOrders);
-            }
-
-            // 5. Fetch Follow Requests (incoming)
-            const { data: rData } = await supabase
-                .from('follow_requests')
-                .select('*, profiles:sender_id(*)')
-                .eq('receiver_id', user.id)
-                .eq('status', 'pending');
-
-            if (rData) {
-                setFollowRequests(rData);
-            }
-
-            // 6. Fetch Sent Follow Requests
-            const { data: sRData } = await supabase
-                .from('follow_requests')
-                .select('receiver_id')
-                .eq('sender_id', user.id)
-                .eq('status', 'pending');
-
-            if (sRData) {
-                setSentFollowRequests(sRData.map(r => r.receiver_id));
-            }
         } catch (err) {
             console.error('Error hydrating user data:', err);
         } finally {
             setLoading(false);
+            isFetchingRef.current = false;
+        }
+    }
+
+    async function fetchWishlist(userId) {
+        try {
+            const { data: items, error: wError } = await supabase
+                .from('wishlist_items')
+                .select('*')
+                .eq('user_id', userId);
+
+            if (wError) throw wError;
+
+            if (items && items.length > 0) {
+                const handles = [...new Set(items.map(i => i.product_handle))].filter(Boolean);
+                try {
+                    const products = await getProductsByHandles(handles);
+                    const enriched = items.map(dbItem => {
+                        const shopifyProduct = products.find(p => p.handle === dbItem.product_handle);
+                        return shopifyProduct
+                            ? { ...shopifyProduct, isPrivate: dbItem.is_private, db_id: dbItem.id }
+                            : { id: `missing-${dbItem.product_handle}`, handle: dbItem.product_handle, title: `Producto no disponible`, price: '---', isPrivate: dbItem.is_private, db_id: dbItem.id };
+                    });
+                    setWishlist(enriched);
+                } catch (err) {
+                    console.error('Shopify fetch error:', err);
+                }
+            } else {
+                setWishlist([]);
+            }
+        } catch (err) {
+            if (err.code === 'PGRST116' || err.status === 404) {
+                console.warn('Tabla wishlist_items no encontrada.');
+            } else {
+                console.error('Error fetching wishlist:', err);
+            }
+        }
+    }
+
+    async function fetchFriendships(userId) {
+        try {
+            const { data: relationshipData, error: fError } = await supabase
+                .from('friendships')
+                .select('*')
+                .or(`user_id.eq.${userId},friend_id.eq.${userId}`);
+
+            if (fError) throw fError;
+
+            if (relationshipData) {
+                const accepted = relationshipData.filter(r => r.status === 'accepted');
+                const friendIds = accepted.map(f => f.user_id === userId ? f.friend_id : f.user_id);
+                setFollowing(friendIds);
+
+                if (friendIds.length > 0) {
+                    const { data: fullFriendProfiles } = await supabase.from('profiles').select('*').in('id', friendIds);
+                    if (fullFriendProfiles) setFriends(fullFriendProfiles);
+                }
+
+                const incoming = relationshipData.filter(r => r.friend_id === userId && r.status === 'pending');
+                setFollowRequests(incoming);
+
+                const outgoing = relationshipData.filter(r => r.user_id === userId && r.status === 'pending');
+                setSentFollowRequests(outgoing.map(r => r.friend_id));
+            }
+        } catch (err) {
+            console.warn('Error fetching friendships (check if table exists):', err.message);
+        }
+    }
+
+    async function fetchOrders(userId) {
+        try {
+            const { data: oData, error: oError } = await supabase
+                .from('orders')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false });
+
+            if (oError) throw oError;
+            if (oData) setOrders(oData);
+        } catch (err) {
+            console.warn('Error fetching orders (check if table exists):', err.message);
         }
     }
 
@@ -324,18 +338,18 @@ export function WishlistProvider({ children }) {
         if (following.includes(targetUserId)) return;
 
         const { error } = await supabase
-            .from('follow_requests')
+            .from('friendships')
             .insert({
-                sender_id: session.user.id,
-                receiver_id: targetUserId,
+                user_id: session.user.id,
+                friend_id: targetUserId,
                 status: 'pending'
             });
 
         if (error) {
-            console.error('Error sending friend request:', error);
-            // Fallback for demo: just follow directly if table missing
-            toggleFollow(targetUserId);
+            console.error('CRITICAL: Error sending friend request:', error);
+            alert(`No se pudo enviar la solicitud: ${error.message}`);
         } else {
+            console.log('Friend request sent successfully to:', targetUserId);
             setSentFollowRequests(prev => [...prev, targetUserId]);
             alert('¡Listo! Solicitud de amistad enviada. ⌛');
         }
@@ -344,61 +358,84 @@ export function WishlistProvider({ children }) {
     const acceptFollowRequest = async (requestId, senderId) => {
         if (!isLoggedIn) return;
 
-        // 1. Add to friends
+        // Update friendships status to 'accepted'
         const { error: fError } = await supabase
-            .from('friends')
-            .insert({ user_id: session.user.id, friend_id: senderId });
+            .from('friendships')
+            .update({ status: 'accepted' })
+            .eq('id', requestId);
 
         if (fError) {
-            console.error('Error accepting follow request:', fError);
+            console.error('Error accepting friend request:', fError);
+            alert('Error al aceptar la solicitud.');
             return;
         }
-
-        // 2. Update request status
-        await supabase
-            .from('follow_requests')
-            .delete()
-            .eq('id', requestId);
 
         // Update local state
         setFollowRequests(prev => prev.filter(r => r.id !== requestId));
         setFollowing(prev => [...prev, senderId]);
+        alert('¡Solicitud aceptada! Ahora son amigos. ✓');
     };
 
     const rejectFollowRequest = async (requestId) => {
         if (!isLoggedIn) return;
 
         await supabase
-            .from('follow_requests')
+            .from('friendships')
             .delete()
             .eq('id', requestId);
 
         setFollowRequests(prev => prev.filter(r => r.id !== requestId));
+        alert('Solicitud rechazada.');
     };
 
     const toggleFollow = async (friendId) => {
-        if (!isLoggedIn) return;
+        if (!isLoggedIn || !session?.user?.id) return;
 
-        const isFollowing = following.includes(friendId);
+        setSocialLoading(prev => ({ ...prev, [friendId]: true }));
+        try {
+            const isFollowing = following.includes(friendId);
 
-        if (isFollowing) {
-            setFollowing(prev => prev.filter(id => id !== friendId));
-            await supabase.from('friends').delete().eq('user_id', session.user.id).eq('friend_id', friendId);
-        } else {
-            // Check if there is already a pending request
-            const { data: existing } = await supabase
-                .from('follow_requests')
-                .select('*')
-                .eq('sender_id', session.user.id)
-                .eq('receiver_id', friendId)
-                .maybeSingle();
+            if (isFollowing) {
+                // Unfriend
+                if (window.confirm('¿Quieres eliminar a este amigo?')) {
+                    setFollowing(prev => prev.filter(id => id !== friendId));
+                    await supabase
+                        .from('friendships')
+                        .delete()
+                        .or(`and(user_id.eq.${session.user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${session.user.id})`);
 
-            if (existing) {
-                alert('Ya enviaste una solicitud de amistad. ¡Pronto recibirás noticias!');
-                return;
+                    fetchUserData(session.user);
+                }
+            } else {
+                // Check if there is already a pending request
+                const { data: existing, error: selectError } = await supabase
+                    .from('friendships')
+                    .select('*')
+                    .or(`and(user_id.eq.${session.user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${session.user.id})`)
+                    .maybeSingle();
+
+                if (selectError) {
+                    console.error('Error checking existing friendship:', selectError);
+                }
+
+                if (existing) {
+                    if (existing.status === 'pending') {
+                        if (existing.user_id === session.user.id) {
+                            alert('Ya enviaste una solicitud. ¡Pronto recibirá noticias!');
+                        } else {
+                            alert('Este usuario ya te envió una solicitud. Búscala en tu perfil.');
+                        }
+                    } else if (existing.status === 'accepted') {
+                        fetchUserData(session.user);
+                    }
+                    return;
+                }
+
+                console.log('Sending new friend request to:', friendId);
+                await sendFollowRequest(friendId);
             }
-
-            await sendFollowRequest(friendId);
+        } finally {
+            setSocialLoading(prev => ({ ...prev, [friendId]: false }));
         }
     };
 
@@ -501,6 +538,7 @@ export function WishlistProvider({ children }) {
             placeOrder,
             isLoggedIn,
             loading,
+            socialLoading,
             login,
             signUp,
             loginWithGoogle,

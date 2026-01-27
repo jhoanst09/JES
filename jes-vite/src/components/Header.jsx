@@ -54,11 +54,10 @@ export default function Header() {
                         redOffset={0}
                         greenOffset={10}
                         blueOffset={20}
-                        brightness={50}
-                        opacity={0.93}
-                        backgroundOpacity={0.1}
-                        saturation={1}
-                        mixBlendMode="difference"
+                        brightness={isLightMode ? 100 : 20}
+                        opacity={0.8}
+                        backgroundOpacity={isLightMode ? 0.3 : 0.1}
+                        saturation={1.2}
                     >
                         <div className="flex items-center justify-between w-full px-6">
                             {/* Logo */}
@@ -67,7 +66,7 @@ export default function Header() {
                                     <img
                                         src="/assets/logo.png"
                                         alt="JES"
-                                        className="h-9 w-auto object-contain invert brightness-[200%]"
+                                        className={`h-9 w-auto object-contain ${!isLightMode ? 'invert brightness-[200%]' : ''}`}
                                     />
                                 </Link>
                             </div>
@@ -76,7 +75,7 @@ export default function Header() {
                             <div className="flex items-center gap-2 shrink-0">
                                 <Link
                                     to="/profile"
-                                    className="hidden md:flex p-2.5 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all relative active:scale-95"
+                                    className="hidden md:flex p-2.5 text-zinc-600 dark:text-white/80 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-all relative active:scale-95"
                                     aria-label="Perfil"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
@@ -87,11 +86,11 @@ export default function Header() {
                                     )}
                                 </Link>
 
-                                <ThemeToggle className="text-white/80 hover:text-white hover:bg-white/10" />
+                                <ThemeToggle className="text-zinc-600 dark:text-white/80 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10" />
 
                                 <button
                                     onClick={() => setSearchOpen(true)}
-                                    className="hidden md:flex p-2.5 bg-white/5 hover:bg-white text-white hover:text-black rounded-full transition-all items-center justify-center border border-white/5 active:scale-95 group"
+                                    className="hidden md:flex p-2.5 bg-black/5 dark:bg-white/5 hover:bg-zinc-900 dark:hover:bg-white text-zinc-900 dark:text-white hover:text-white dark:hover:text-black rounded-full transition-all items-center justify-center border border-black/5 dark:border-white/5 active:scale-95 group"
                                     aria-label="Buscar"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
@@ -100,7 +99,7 @@ export default function Header() {
                                 {/* Terminal Trigger - Visible on all devices */}
                                 <button
                                     onClick={() => openTerminal()}
-                                    className="flex p-2 md:p-2.5 bg-zinc-900 border border-green-500/30 text-green-500 rounded-full hover:bg-green-500 hover:text-black transition-all active:scale-95"
+                                    className="flex p-2 md:p-2.5 bg-zinc-900 dark:bg-black border border-green-500/30 text-green-500 rounded-full hover:bg-green-500 hover:text-black transition-all active:scale-95"
                                     aria-label="Abrir Terminal"
                                     title="Modo Hacker"
                                 >
@@ -109,7 +108,7 @@ export default function Header() {
 
                                 <button
                                     onClick={() => setIsCartOpen(true)}
-                                    className="hidden md:flex p-2.5 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all relative active:scale-95"
+                                    className="hidden md:flex p-2.5 text-zinc-600 dark:text-white/80 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-all relative active:scale-95"
                                     aria-label="Carrito"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" /></svg>
@@ -122,7 +121,7 @@ export default function Header() {
 
                                 <button
                                     onClick={() => setIsMenuOpen(true)}
-                                    className="p-2.5 bg-black text-white rounded-full transition-all active:scale-95 border border-white/10 hover:border-blue-500/50"
+                                    className="p-2.5 bg-zinc-100 dark:bg-black text-zinc-900 dark:text-white rounded-full transition-all active:scale-95 border border-black/10 dark:border-white/10 hover:border-blue-500/50 shadow-sm"
                                     aria-label="Menu"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="18" y2="18" /></svg>

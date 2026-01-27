@@ -19,16 +19,39 @@ const INITIAL_MESSAGES = {
 
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
+import { useWishlist } from '../context/WishlistContext';
+import { chatWithAI } from '../services/ai';
+import { getProducts } from '../services/shopify';
 
 export default function Chat() {
+    const { session, friends, isLoggedIn } = useWishlist();
     const [searchParams] = useSearchParams();
     const userId = searchParams.get('user');
     const [view, setView] = useState('list'); // 'list' | 'chat'
     const [activeChat, setActiveChat] = useState(null);
-    const [messages, setMessages] = useState(INITIAL_MESSAGES);
+    const [messages, setMessages] = useState({});
     const [input, setInput] = useState('');
-    const [filteredChats, setFilteredChats] = useState(MOCK_CHATS);
+    const [onlineUsers, setOnlineUsers] = useState([]);
     const scrollRef = useRef(null);
+
+    // Map friends to chat format
+    const chatList = [
+        { id: 'bot', name: 'JARVIS', avatar: '🤖', lastMsg: 'Hola! Soy tu asistente...', type: 'bot', online: true },
+        ...friends.map(f => ({
+            id: f.id,
+            name: f.name || f.email?.split('@')[0] || 'Amigo',
+            avatar: f.avatar_url,
+            lastMsg: '...',
+            type: 'friend',
+            online: onlineUsers.includes(f.id)
+        }))
+    ];
+
+    const [filteredChats, setFilteredChats] = useState(chatList);
+
+    useEffect(() => {
+        setFilteredChats(chatList);
+    }, [friends, onlineUsers]);
 
     useEffect(() => {
         async function loadTargetUser() {
@@ -66,42 +89,109 @@ export default function Chat() {
         loadTargetUser();
     }, [userId]);
 
+    // Load messages for active chat
     useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-    }, [messages, activeChat]);
+        if (!activeChat || activeChat.id === 'bot' || !session?.user?.id) return;
 
-    const handleSend = (e) => {
-        e.preventDefault();
-        if (!input.trim() || !activeChat) return;
+        async function fetchMessages() {
+            const { data, error } = await supabase
+                .from('messages')
+                .select('*')
+                .or(`and(sender_id.eq.${session.user.id},receiver_id.eq.${activeChat.id}),and(sender_id.eq.${activeChat.id},receiver_id.eq.${session.user.id})`)
+                .order('created_at', { ascending: true });
 
-        const newMsg = {
-            id: Date.now(),
-            sender: 'Yo',
-            text: input,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-
-        setMessages(prev => ({
-            ...prev,
-            [activeChat.id]: [...(prev[activeChat.id] || []), newMsg]
-        }));
-        setInput('');
-
-        if (activeChat.type === 'bot') {
-            setTimeout(() => {
-                const botMsg = {
-                    id: Date.now() + 1,
-                    sender: 'JES Bot',
-                    text: '¡Entendido! Déjame revisar eso en la bodega y te cuento. 📦💨',
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                };
+            if (data) {
                 setMessages(prev => ({
                     ...prev,
-                    [activeChat.id]: [...(prev[activeChat.id] || []), botMsg]
+                    [activeChat.id]: data.map(m => ({
+                        id: m.id,
+                        sender: m.sender_id === session.user.id ? 'Yo' : activeChat.name,
+                        text: m.content,
+                        time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    }))
                 }));
-            }, 1000);
+            }
+        }
+
+        fetchMessages();
+
+        // Subscribe to real-time messages
+        const channel = supabase
+            .channel(`chat_${activeChat.id}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'messages',
+                filter: `or(sender_id.eq.${activeChat.id},receiver_id.eq.${activeChat.id})`
+            }, (payload) => {
+                const newM = payload.new;
+                // Only add if it's relevant to THIS chat conversation
+                if ((newM.sender_id === session.user.id && newM.receiver_id === activeChat.id) ||
+                    (newM.sender_id === activeChat.id && newM.receiver_id === session.user.id)) {
+
+                    setMessages(prev => {
+                        const currentChatMsgs = prev[activeChat.id] || [];
+                        if (currentChatMsgs.some(m => m.id === newM.id)) return prev;
+
+                        return {
+                            ...prev,
+                            [activeChat.id]: [...currentChatMsgs, {
+                                id: newM.id,
+                                sender: newM.sender_id === session.user.id ? 'Yo' : activeChat.name,
+                                text: newM.content,
+                                time: new Date(newM.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            }]
+                        };
+                    });
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [activeChat, session?.user?.id]);
+
+    const handleSend = async (e) => {
+        e.preventDefault();
+        if (!input.trim() || !activeChat || !session?.user?.id) return;
+
+        const text = input;
+        setInput('');
+
+        if (activeChat.id === 'bot') {
+            // JARVIS Logic
+            const userMsg = { id: Date.now(), sender: 'Yo', text, time: 'Ahora' };
+            setMessages(prev => ({
+                ...prev,
+                bot: [...(prev.bot || []), userMsg]
+            }));
+
+            try {
+                const products = await getProducts(10);
+                const aiResponse = await chatWithAI([{ role: 'user', content: text }], products);
+                setMessages(prev => ({
+                    ...prev,
+                    bot: [...(prev.bot || []), { id: Date.now() + 1, sender: 'JARVIS', text: aiResponse, time: 'Ahora' }]
+                }));
+            } catch (err) {
+                console.error('JARVIS Error:', err);
+            }
+            return;
+        }
+
+        // Real Message Logic
+        const { error } = await supabase
+            .from('messages')
+            .insert({
+                sender_id: session.user.id,
+                receiver_id: activeChat.id,
+                content: text
+            });
+
+        if (error) {
+            console.error('Error sending message:', error);
+            alert('No se pudo enviar el mensaje.');
         }
     };
 
@@ -109,8 +199,8 @@ export default function Chat() {
         <div className="min-h-screen bg-zinc-50 dark:bg-black transition-colors flex flex-col">
             <Header />
 
-            <main className="flex-1 max-w-[1400px] mx-auto w-full px-4 md:px-6 pt-24 pb-20 md:pt-32 md:pb-32 flex flex-col">
-                <div className="flex-1 bg-white dark:bg-zinc-900 rounded-3xl md:rounded-[48px] border border-black/5 dark:border-white/10 flex flex-col md:flex-row overflow-hidden shadow-xl">
+            <main className="flex-1 max-w-[1600px] mx-auto w-full px-4 md:px-6 pt-24 pb-20 md:pt-32 md:pb-32 flex flex-col">
+                <div className="flex-1 bg-white dark:bg-zinc-900 rounded-3xl md:rounded-[48px] border border-black/5 dark:border-white/10 flex flex-col md:flex-row overflow-hidden shadow-xl lg:grid lg:grid-cols-[380px_1fr_320px]">
 
                     {/* Sidebar / List */}
                     <div className={`${view === 'chat' ? 'hidden md:flex' : 'flex'} w-full md:w-96 bg-white dark:bg-zinc-900 border-r border-black/5 dark:border-white/10 flex-col`}>
@@ -154,86 +244,139 @@ export default function Chat() {
                         </div>
                     </div>
 
-                    {/* Chat Thread */}
-                    <div className={`${view === 'list' ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-[#efeae2] dark:bg-zinc-950/20 relative`}>
-                        {/* Background Pattern Hint */}
-                        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none bg-[url('https://upload.wikimedia.org/wikipedia/commons/4/4d/WhatsApp_background.png')] bg-repeat" />
-
-                        <AnimatePresence mode="wait">
-                            {activeChat ? (
-                                <motion.div
-                                    key={activeChat.id}
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="flex-1 flex flex-col h-full relative z-10 bg-white/50 dark:bg-zinc-900/50"
-                                >
-                                    {/* Thread Header */}
-                                    <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl px-6 py-4 border-b border-black/5 dark:border-white/10 flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <button onClick={() => setView('list')} className="md:hidden text-zinc-500 text-xl font-bold">←</button>
-                                            <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xl shadow-sm overflow-hidden">
-                                                {activeChat.avatar?.startsWith('http') ? (
-                                                    <img src={activeChat.avatar} className="w-full h-full object-cover" alt="" />
-                                                ) : (
-                                                    activeChat.avatar
-                                                )}
-                                            </div>
-                                            <div>
-                                                <h4 className="font-bold text-zinc-900 dark:text-white text-sm leading-none">{activeChat.name}</h4>
-                                                <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-widest mt-1 transition-colors">{activeChat.online ? 'En línea' : 'Desconectado'}</p>
+                    {/* Chat Area */}
+                    <div className={`${view === 'chat' ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-zinc-50 dark:bg-black/20`}>
+                        {activeChat ? (
+                            <>
+                                {/* Chat Header */}
+                                <div className="p-4 md:p-6 bg-white dark:bg-zinc-900 border-b border-black/5 dark:border-white/10 flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <button onClick={() => setView('list')} className="md:hidden p-2 text-zinc-400 hover:text-blue-500">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+                                        </button>
+                                        <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xl relative shrink-0 overflow-hidden">
+                                            {activeChat.avatar?.startsWith('http') ? (
+                                                <img src={activeChat.avatar} className="w-full h-full object-cover" alt="" />
+                                            ) : (
+                                                activeChat.avatar || '👤'
+                                            )}
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black text-zinc-900 dark:text-white uppercase tracking-tighter italic">{activeChat.name}</h3>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`w-2 h-2 rounded-full ${activeChat.online ? 'bg-green-500' : 'bg-zinc-300'}`} />
+                                                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">{activeChat.online ? 'En línea' : 'Desconectado'}</span>
                                             </div>
                                         </div>
                                     </div>
-
-                                    {/* Messages container */}
-                                    <div ref={scrollRef} className="flex-1 p-6 overflow-y-auto space-y-4 no-scrollbar">
-                                        {(messages[activeChat.id] || []).map((msg) => (
-                                            <div key={msg.id} className={`flex ${msg.sender === 'Yo' ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-[85%] rounded-[24px] py-3 px-5 shadow-sm text-sm relative transition-all ${msg.sender === 'Yo'
-                                                    ? 'bg-blue-600 text-white rounded-tr-none'
-                                                    : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white rounded-tl-none border border-black/5 dark:border-white/5'}`}>
-                                                    <p className="leading-relaxed">{msg.text}</p>
-                                                    <div className="flex justify-end mt-1 opacity-50">
-                                                        <span className="text-[9px] font-bold uppercase tracking-tighter">
-                                                            {msg.time} {msg.sender === 'Yo' && '✓✓'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Input Area */}
-                                    <form onSubmit={handleSend} className="p-4 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md border-t border-black/5 dark:border-white/10">
-                                        <div className="flex gap-2 items-center bg-zinc-100 dark:bg-zinc-800 rounded-2xl px-4 py-1 border border-black/5 dark:border-white/5">
-                                            <button type="button" className="text-zinc-400 p-2 hover:text-blue-500 transition-colors">😊</button>
-                                            <input
-                                                type="text"
-                                                value={input}
-                                                onChange={(e) => setInput(e.target.value)}
-                                                placeholder="Envía un mensaje a la comunidad..."
-                                                className="flex-1 bg-transparent border-none outline-none py-3 text-sm dark:text-white placeholder:text-zinc-400"
-                                            />
-                                            <button type="button" className="text-zinc-400 p-2 hover:text-blue-500 transition-colors">📎</button>
-                                            <button className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${input.trim() ? 'bg-blue-600 text-white scale-100' : 'bg-transparent text-zinc-300 scale-90'}`}>
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
-                                            </button>
-                                        </div>
-                                    </form>
-                                </motion.div>
-                            ) : (
-                                <div className="flex-1 flex flex-col items-center justify-center text-center p-10 bg-transparent">
-                                    <div className="w-32 h-32 rounded-3xl bg-white dark:bg-zinc-800 flex items-center justify-center text-5xl mb-8 shadow-xl border border-black/5 dark:border-white/5">💬</div>
-                                    <h3 className="text-2xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter italic">Mensajería JES</h3>
-                                    <p className="text-zinc-500 dark:text-zinc-400 mt-4 max-w-xs text-sm leading-relaxed font-medium">Conéctate con la comunidad, comparte tus outfits y descubre qué hay de nuevo en la tienda.</p>
-                                    <div className="mt-12 pt-12 border-t border-black/[0.03] dark:border-white/[0.03] text-[9px] text-zinc-400 dark:text-zinc-600 font-black uppercase tracking-[0.4em]">
-                                        Secure Jes Channel
+                                    <div className="flex gap-2">
+                                        <button className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l2.27-2.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+                                        </button>
+                                        <button className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7a2 2 0 0 0-2-2H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V7z" /><path d="m1 7 11 8 11-8" /></svg>
+                                        </button>
                                     </div>
                                 </div>
-                            )}
-                        </AnimatePresence>
+
+                                {/* Messages View */}
+                                <div
+                                    ref={scrollRef}
+                                    className="flex-1 p-6 md:p-8 overflow-y-auto space-y-6 no-scrollbar"
+                                >
+                                    {(messages[activeChat.id] || []).map((msg, idx) => (
+                                        <motion.div
+                                            key={msg.id}
+                                            initial={{ opacity: 0, x: msg.sender === 'Yo' ? 20 : -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            className={`flex flex-col ${msg.sender === 'Yo' ? 'items-end' : 'items-start'}`}
+                                        >
+                                            <div className={`max-w-[80%] px-5 py-3 rounded-3xl text-sm font-medium shadow-sm ${msg.sender === 'Yo' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white rounded-tl-none border border-black/5 dark:border-white/5'}`}>
+                                                {msg.text}
+                                            </div>
+                                            <span className="text-[9px] font-black text-zinc-400 mt-2 uppercase tracking-widest">{msg.time}</span>
+                                        </motion.div>
+                                    ))}
+                                </div>
+
+                                {/* Chat Input */}
+                                <div className="p-4 md:p-6 bg-white dark:bg-zinc-900 border-t border-black/5 dark:border-white/10">
+                                    <form onSubmit={handleSend} className="flex gap-4">
+                                        <input
+                                            type="text"
+                                            value={input}
+                                            onChange={(e) => setInput(e.target.value)}
+                                            placeholder="Escribe un mensaje..."
+                                            className="flex-1 bg-zinc-100 dark:bg-zinc-800 border-none rounded-2xl px-6 py-4 text-sm outline-none focus:ring-2 ring-blue-500/20 dark:text-white font-medium"
+                                        />
+                                        <button
+                                            type="submit"
+                                            disabled={!input.trim()}
+                                            className="bg-blue-600 text-white p-4 rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30 disabled:opacity-50 active:scale-95"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
+                                        </button>
+                                    </form>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+                                <span className="text-8xl mb-8 opacity-20 grayscale">💬</span>
+                                <h3 className="text-2xl font-black text-zinc-900 dark:text-white uppercase tracking-tighter italic">Selecciona un chat</h3>
+                                <p className="text-zinc-500 dark:text-zinc-400 mt-4 max-w-xs font-medium italic">Elige a un amigo de la lista para empezar a parchar.</p>
+                            </div>
+                        )}
                     </div>
 
+                    {/* Right Panel - Amigos y actividad */}
+                    <div className="hidden lg:flex flex-col bg-white dark:bg-zinc-900 border-l border-black/5 dark:border-white/10 w-full overflow-hidden">
+                        <div className="p-8 border-b border-black/5 dark:border-white/10">
+                            <h3 className="text-sm font-black text-blue-600 dark:text-blue-500 uppercase tracking-[0.2em] mb-1">Amigos</h3>
+                            <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest">Activos Ahora</p>
+                        </div>
+                        <div className="flex-1 p-6 overflow-y-auto no-scrollbar space-y-6">
+                            <div className="space-y-4">
+                                {friends.length > 0 ? (
+                                    friends.map(friend => (
+                                        <div key={friend.id} className="flex items-center justify-between group cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 p-2 rounded-2xl transition-all">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center border border-black/5 dark:border-white/5 relative shrink-0 overflow-hidden">
+                                                    {friend.avatar_url ? (
+                                                        <img src={friend.avatar_url} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        '👤'
+                                                    )}
+                                                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white dark:border-zinc-900" />
+                                                </div>
+                                                <p className="text-xs font-black text-zinc-900 dark:text-white uppercase tracking-tighter truncate w-24 italic">{friend.name || 'Amigo'}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => { setActiveChat({ id: friend.id, name: friend.name, avatar: friend.avatar_url, type: 'friend', online: true }); setView('chat'); }}
+                                                className="opacity-0 group-hover:opacity-100 p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-all"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
+                                            </button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-[10px] text-zinc-400 font-medium italic">No tienes amigos conectados aún.</p>
+                                )}
+                            </div>
+
+                            <div className="pt-8 border-t border-black/5 dark:border-white/10">
+                                <h3 className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mb-4">Sugerencias</h3>
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-lg">👑</div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-zinc-900 dark:text-white uppercase tracking-widest italic">JES Team</p>
+                                            <p className="text-[9px] text-zinc-500 font-medium italic">Soporte oficial</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </main>
 

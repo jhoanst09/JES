@@ -115,7 +115,7 @@ export default function ProductDetails() {
     const inWishlist = isInWishlist(product.id);
 
     return (
-        <div className="min-h-screen selection:bg-blue-500/30">
+        <div className="min-h-screen bg-white dark:bg-black text-zinc-900 dark:text-white selection:bg-blue-500/30 transition-colors duration-300">
             <Header />
 
             <main className="max-w-[1400px] mx-auto px-6 pt-32 pb-24">
@@ -123,7 +123,7 @@ export default function ProductDetails() {
                     {/* Media Gallery */}
                     <div className="flex-1 space-y-4">
                         <div
-                            className="aspect-square bg-zinc-900 rounded-[40px] overflow-hidden border border-white/5"
+                            className="aspect-square bg-zinc-50 dark:bg-zinc-900 rounded-[40px] overflow-hidden border border-black/5 dark:border-white/5 shadow-inner"
                         >
                             <img
                                 src={product.images[selectedImage] || product.image}
@@ -168,11 +168,11 @@ export default function ProductDetails() {
                         </div>
 
                         <div className="space-y-6">
-                            <div className="prose prose-invert prose-sm max-w-none text-gray-400 leading-relaxed" dangerouslySetInnerHTML={{ __html: product.descriptionHtml || product.description }} />
+                            <div className="prose dark:prose-invert prose-sm max-w-none text-zinc-600 dark:text-zinc-400 leading-relaxed transition-colors" dangerouslySetInnerHTML={{ __html: product.descriptionHtml || product.description }} />
 
                             <div className="flex flex-wrap gap-2 pt-4">
                                 {product.tags.map(tag => (
-                                    <span key={tag} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] text-gray-400 uppercase tracking-widest">
+                                    <span key={tag} className="px-3 py-1 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-full text-[10px] text-zinc-500 dark:text-gray-400 uppercase tracking-widest transition-colors">
                                         {tag}
                                     </span>
                                 ))}
@@ -204,7 +204,7 @@ export default function ProductDetails() {
 
                             <button
                                 onClick={() => openTerminal(product)}
-                                className="w-full py-5 bg-zinc-900 text-white dark:bg-zinc-800 dark:hover:bg-zinc-700 font-black rounded-full border border-black/10 dark:border-white/10 hover:bg-zinc-800 transition-all text-sm uppercase tracking-widest"
+                                className="w-full py-5 bg-zinc-900 dark:bg-zinc-800 text-white font-black rounded-full border border-black/10 dark:border-white/10 hover:bg-black dark:hover:bg-zinc-700 transition-all text-sm uppercase tracking-widest shadow-xl"
                             >
                                 Comprar Ahora
                             </button>
@@ -236,13 +236,13 @@ export default function ProductDetails() {
                                     <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5">
                                         <button
                                             onClick={() => setWantsPrivate(false)}
-                                            className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${!wantsPrivate ? 'bg-white text-black shadow-lg' : 'text-zinc-500'}`}
+                                            className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${!wantsPrivate ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-lg' : 'text-zinc-500'}`}
                                         >
                                             🌍 Público
                                         </button>
                                         <button
                                             onClick={() => setWantsPrivate(true)}
-                                            className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${wantsPrivate ? 'bg-zinc-800 text-white shadow-lg' : 'text-zinc-500'}`}
+                                            className={`flex-1 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${wantsPrivate ? 'bg-zinc-800 dark:bg-white text-white dark:text-black shadow-lg' : 'text-zinc-500'}`}
                                         >
                                             🔒 Privado
                                         </button>

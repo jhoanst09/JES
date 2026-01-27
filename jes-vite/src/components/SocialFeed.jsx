@@ -32,8 +32,8 @@ const MOCK_POSTS = [
     }
 ];
 
-export default function SocialFeed() {
-    const { isLoggedIn, userProfile } = useWishlist();
+export default function SocialFeed({ profileUserId = null }) {
+    const { isLoggedIn, session, userProfile } = useWishlist();
     const [input, setInput] = useState('');
     const [selectedImage, setSelectedImage] = useState(null);
     const fileInputRef = useRef(null);
@@ -41,17 +41,46 @@ export default function SocialFeed() {
     const [isPosting, setIsPosting] = useState(false);
     const [commentingOn, setCommentingOn] = useState(null);
     const [commentInput, setCommentInput] = useState('');
+    const [comments, setComments] = useState({}); // { postId: [comments] }
+    const [loadingComments, setLoadingComments] = useState({});
 
     useEffect(() => {
         const fetchPosts = async () => {
-            // 1. Fetch Posts
-            const { data: postsData, error: postsError } = await supabase
+            let query = supabase
                 .from('posts')
                 .select('*, profiles(name, avatar_url)')
                 .order('created_at', { ascending: false });
 
+            if (profileUserId) {
+                query = query.eq('user_id', profileUserId);
+            }
+
+            const { data: postsData, error: postsError } = await query;
+
             if (postsError) {
-                console.error('Error fetching posts:', postsError);
+                console.error('CRITICAL: Error fetching posts:', postsError);
+                // Si el error es sobre relaciones, intentamos sin join
+                if (postsError.message?.includes('relationship') || postsError.message?.includes('profiles')) {
+                    const { data: rawPosts, error: rawError } = await supabase
+                        .from('posts')
+                        .select('*')
+                        .order('created_at', { ascending: false });
+
+                    if (!rawError) {
+                        setPosts(rawPosts.map(p => ({
+                            id: p.id,
+                            userId: p.user_id,
+                            user: 'Usuario',
+                            content: p.content,
+                            image: p.media_url,
+                            time: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Recientemente',
+                            likes: p.likes_count || 0,
+                            comments: p.comments_count || 0,
+                            isLiked: false
+                        })));
+                        return;
+                    }
+                }
                 setPosts(MOCK_POSTS);
                 return;
             }
@@ -70,18 +99,21 @@ export default function SocialFeed() {
             }
 
             // 3. Format with isLiked status
-            const formatted = postsData.map(p => ({
-                id: p.id,
-                userId: p.user_id,
-                user: p.profiles?.name || 'anon',
-                avatar: p.profiles?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
-                content: p.content,
-                image: p.media_url,
-                time: new Date(p.created_at).toLocaleDateString(),
-                likes: p.likes_count || 0,
-                comments: p.comments_count || 0,
-                isLiked: userLikedPostIds.has(p.id)
-            }));
+            const formatted = (postsData || []).map(p => {
+                const profile = p.profiles;
+                return {
+                    id: p.id,
+                    userId: p.user_id,
+                    user: profile?.name || 'Usuario',
+                    avatar: profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
+                    content: p.content,
+                    image: p.media_url,
+                    time: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Recientemente',
+                    likes: p.likes_count || 0,
+                    comments: p.comments_count || 0,
+                    isLiked: userLikedPostIds.has(p.id)
+                };
+            });
 
             setPosts(formatted);
         };
@@ -90,14 +122,55 @@ export default function SocialFeed() {
 
         // Subscribe to real-time changes
         const channel = supabase
-            .channel('public:posts')
+            .channel(`public:posts:${profileUserId || 'all'}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
+                console.log('Real-time post update!');
                 fetchPosts();
             })
             .subscribe();
 
-        return () => supabase.removeChannel(channel);
-    }, []);
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [profileUserId, isLoggedIn]); // Reducidas dependencias para evitar loops
+
+    const fetchComments = async (postId) => {
+        if (loadingComments[postId]) return;
+
+        setLoadingComments(prev => ({ ...prev, [postId]: true }));
+
+        try {
+            const { data, error } = await supabase
+                .from('post_comments')
+                .select('*, profiles(name, avatar_url)')
+                .eq('post_id', postId)
+                .order('created_at', { ascending: true });
+
+            if (error) {
+                console.error('Error fetching comments:', error);
+                // Intento sin join si falla por perfiles
+                const { data: rawData, error: rawErr } = await supabase
+                    .from('post_comments')
+                    .select('*')
+                    .eq('post_id', postId)
+                    .order('created_at', { ascending: true });
+
+                if (!rawErr) {
+                    setComments(prev => ({ ...prev, [postId]: rawData || [] }));
+                    return;
+                }
+                throw error;
+            }
+        } finally {
+            setLoadingComments(prev => ({ ...prev, [postId]: false }));
+        }
+    };
+
+    useEffect(() => {
+        if (commentingOn) {
+            fetchComments(commentingOn);
+        }
+    }, [commentingOn]);
 
     const handleImageSelect = (e) => {
         const file = e.target.files[0];
@@ -134,7 +207,7 @@ export default function SocialFeed() {
             const { data, error } = await supabase
                 .from('posts')
                 .insert({
-                    user_id: userProfile.id,
+                    user_id: session.user.id,
                     content: input,
                     media_url: imageUrl,
                     created_at: new Date().toISOString()
@@ -220,10 +293,13 @@ export default function SocialFeed() {
                 .from('post_comments')
                 .insert({
                     post_id: postId,
-                    user_id: userProfile?.id,
+                    user_id: session.user.id,
                     content: content
                 });
             if (error) throw error;
+
+            // Refrescar comentarios inmediatamente
+            fetchComments(postId);
         } catch (error) {
             console.error('Error commenting:', error);
             alert('No pudimos enviar tu comentario.');
@@ -232,75 +308,77 @@ export default function SocialFeed() {
 
     return (
         <div className="max-w-2xl mx-auto px-4 pb-32">
-            {/* Create Post Header */}
-            {!isLoggedIn ? (
-                <div className="bg-blue-600 rounded-[32px] p-8 mb-8 text-center shadow-2xl relative overflow-hidden group">
-                    <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-                    <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter mb-4 italic">Únete a la Comunidad</h3>
-                    <p className="text-blue-100 mb-6 font-medium text-sm md:text-base">Inicia sesión para compartir tus fotos, reseñas y vibras con la comunidad.</p>
-                    <Link to="/profile" className="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-black uppercase tracking-widest text-[10px] hover:scale-105 active:scale-95 transition-all shadow-xl">Iniciar Sesión</Link>
-                </div>
-            ) : (
-                <div className="bg-white dark:bg-zinc-900 rounded-[32px] p-6 mb-8 border border-black/10 dark:border-white/10 shadow-xl">
-                    <div className="flex gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xl shadow-inner border border-black/5 dark:border-white/5 shrink-0 overflow-hidden">
-                            {userProfile?.avatar_url ? (
-                                <img src={userProfile.avatar_url} className="w-full h-full object-cover" />
-                            ) : (
-                                '👤'
-                            )}
-                        </div>
-                        <div className="flex-1">
-                            <textarea
-                                placeholder="¿Qué quieres compartir con la comunidad?"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                className="w-full bg-transparent border-none outline-none text-zinc-900 dark:text-white resize-none text-lg placeholder:text-zinc-500 dark:placeholder:text-zinc-700"
-                                rows="2"
-                            />
+            {/* Create Post Header - Solo si es el feed general o mi propio perfil */}
+            {(!profileUserId || (profileUserId === session?.user?.id)) && (
+                !isLoggedIn ? (
+                    <div className="bg-blue-600 rounded-[32px] p-8 mb-8 text-center shadow-2xl relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                        <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter mb-4 italic">Únete a la Comunidad</h3>
+                        <p className="text-blue-100 mb-6 font-medium text-sm md:text-base">Inicia sesión para compartir tus fotos, reseñas y vibras con la comunidad.</p>
+                        <Link to="/profile" className="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-black uppercase tracking-widest text-[10px] hover:scale-105 active:scale-95 transition-all shadow-xl">Iniciar Sesión</Link>
+                    </div>
+                ) : (
+                    <div className="bg-white dark:bg-zinc-900 rounded-[32px] p-6 mb-8 border border-black/10 dark:border-white/10 shadow-xl">
+                        <div className="flex gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xl shadow-inner border border-black/5 dark:border-white/5 shrink-0 overflow-hidden">
+                                {userProfile?.avatar_url ? (
+                                    <img src={userProfile.avatar_url} className="w-full h-full object-cover" />
+                                ) : (
+                                    '👤'
+                                )}
+                            </div>
+                            <div className="flex-1">
+                                <textarea
+                                    placeholder="¿Qué quieres compartir con la comunidad?"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    className="w-full bg-transparent border-none outline-none text-zinc-900 dark:text-white resize-none text-lg placeholder:text-zinc-500 dark:placeholder:text-zinc-700"
+                                    rows="2"
+                                />
 
-                            {selectedImage && (
-                                <div className="mt-4 relative group">
-                                    <img src={URL.createObjectURL(selectedImage)} className="w-24 h-24 object-cover rounded-2xl border-2 border-blue-500 shadow-lg" alt="" />
+                                {selectedImage && (
+                                    <div className="mt-4 relative group">
+                                        <img src={URL.createObjectURL(selectedImage)} className="w-24 h-24 object-cover rounded-2xl border-2 border-blue-500 shadow-lg" alt="" />
+                                        <button
+                                            onClick={() => setSelectedImage(null)}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs shadow-lg hover:scale-110 transition-transform"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="flex justify-between items-center mt-4 border-t border-black/5 dark:border-white/5 pt-4">
+                                    <div className="flex gap-3 md:gap-5">
+                                        <input
+                                            type="file"
+                                            className="hidden"
+                                            ref={fileInputRef}
+                                            accept="image/*"
+                                            onChange={handleImageSelect}
+                                        />
+                                        <button
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="text-zinc-600 dark:text-zinc-400 hover:text-blue-500 transition-colors text-xl"
+                                            title="Subir Imagen"
+                                        >
+                                            🖼️
+                                        </button>
+                                        <button className="text-zinc-600 dark:text-zinc-400 hover:text-blue-500 transition-colors text-xl">📹</button>
+                                        <button className="text-zinc-600 dark:text-zinc-400 hover:text-blue-500 transition-colors text-xl">🛒</button>
+                                    </div>
                                     <button
-                                        onClick={() => setSelectedImage(null)}
-                                        className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs shadow-lg hover:scale-110 transition-transform"
+                                        onClick={handlePost}
+                                        disabled={(!input.trim() && !selectedImage) || isPosting}
+                                        className="bg-blue-600 disabled:opacity-50 text-white px-8 py-2.5 rounded-full font-black uppercase tracking-widest text-[10px] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-blue-500/30"
                                     >
-                                        ✕
+                                        {isPosting ? 'Publicando...' : 'Publicar'}
                                     </button>
                                 </div>
-                            )}
-
-                            <div className="flex justify-between items-center mt-4 border-t border-black/5 dark:border-white/5 pt-4">
-                                <div className="flex gap-3 md:gap-5">
-                                    <input
-                                        type="file"
-                                        className="hidden"
-                                        ref={fileInputRef}
-                                        accept="image/*"
-                                        onChange={handleImageSelect}
-                                    />
-                                    <button
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="text-zinc-600 dark:text-zinc-400 hover:text-blue-500 transition-colors text-xl"
-                                        title="Subir Imagen"
-                                    >
-                                        🖼️
-                                    </button>
-                                    <button className="text-zinc-600 dark:text-zinc-400 hover:text-blue-500 transition-colors text-xl">📹</button>
-                                    <button className="text-zinc-600 dark:text-zinc-400 hover:text-blue-500 transition-colors text-xl">🛒</button>
-                                </div>
-                                <button
-                                    onClick={handlePost}
-                                    disabled={(!input.trim() && !selectedImage) || isPosting}
-                                    className="bg-blue-600 disabled:opacity-50 text-white px-8 py-2.5 rounded-full font-black uppercase tracking-widest text-[10px] hover:scale-105 active:scale-95 transition-all shadow-lg shadow-blue-500/30"
-                                >
-                                    {isPosting ? 'Publicando...' : 'Publicar'}
-                                </button>
                             </div>
                         </div>
                     </div>
-                </div>
+                )
             )}
 
             {/* Posts Grid */}
@@ -311,7 +389,7 @@ export default function SocialFeed() {
                         initial={{ opacity: 0, y: 20 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
-                        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-[40px] overflow-hidden shadow-sm"
+                        className="bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-[40px] overflow-hidden shadow-2xl"
                     >
                         <div className="p-6">
                             <div className="flex justify-between items-start mb-4">
@@ -362,15 +440,38 @@ export default function SocialFeed() {
                             </div>
 
                             {/* Comment Input */}
+                            {/* Comments Section */}
                             <AnimatePresence>
                                 {commentingOn === post.id && (
                                     <motion.div
                                         initial={{ height: 0, opacity: 0 }}
                                         animate={{ height: 'auto', opacity: 1 }}
                                         exit={{ height: 0, opacity: 0 }}
-                                        className="overflow-hidden"
+                                        className="overflow-hidden border-t border-black/5 dark:border-white/5 mt-4"
                                     >
-                                        <div className="pt-4 flex gap-3">
+                                        {/* Existing Comments List */}
+                                        <div className="py-4 space-y-4">
+                                            {loadingComments[post.id] ? (
+                                                <p className="text-center text-[10px] text-zinc-500 font-bold uppercase tracking-widest animate-pulse">Cargando comentarios...</p>
+                                            ) : comments[post.id]?.length > 0 ? (
+                                                comments[post.id].map(comment => (
+                                                    <div key={comment.id} className="flex gap-3">
+                                                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
+                                                            <img src={comment.profiles?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'} className="w-full h-full object-cover" alt="" />
+                                                        </div>
+                                                        <div className="flex-1 bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-2xl border border-black/5 dark:border-white/5">
+                                                            <p className="text-[10px] font-black text-zinc-900 dark:text-white capitalize mb-1">{comment.profiles?.name || 'Usuario'}</p>
+                                                            <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-tight">{comment.content}</p>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <p className="text-center text-[10px] text-zinc-500 font-bold uppercase tracking-widest py-2">Sé el primero en comentar ✨</p>
+                                            )}
+                                        </div>
+
+                                        {/* Comment Input */}
+                                        <div className="pt-2 flex gap-3 pb-4">
                                             <input
                                                 autoFocus
                                                 type="text"
@@ -378,11 +479,12 @@ export default function SocialFeed() {
                                                 value={commentInput}
                                                 onChange={(e) => setCommentInput(e.target.value)}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id)}
-                                                className="flex-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-2 text-sm text-zinc-900 dark:text-white outline-none focus:border-blue-500 transition-all font-medium placeholder:text-zinc-500"
+                                                className="flex-1 bg-zinc-100 dark:bg-zinc-800 border-none rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-white outline-none ring-1 ring-black/5 dark:ring-white/10 focus:ring-blue-500/50 transition-all font-medium placeholder:text-zinc-500"
                                             />
                                             <button
                                                 onClick={() => handleComment(post.id)}
-                                                className="text-blue-500 font-black text-[10px] uppercase tracking-widest px-4"
+                                                disabled={!commentInput.trim()}
+                                                className="bg-zinc-900 dark:bg-white text-white dark:text-black font-black text-[10px] uppercase tracking-widest px-6 rounded-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
                                             >
                                                 Enviar
                                             </button>

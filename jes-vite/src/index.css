@@ -126,7 +126,12 @@ body {
 }
 
 /* Text Colors */
-.light-mode .text-white {
+.light-mode .text-white:not(.bg-red-500, .bg-red-500 *,
+  .bg-blue-600, .bg-blue-600 *,
+  .bg-blue-500, .bg-blue-500 *,
+  .bg-green-500, .bg-green-500 *,
+  .bg-black, .bg-black *,
+  .bg-zinc-900, .bg-zinc-900 *) {
   color: var(--text-primary) !important;
 }
 
@@ -148,17 +153,30 @@ body {
   stroke: currentColor;
 }
 
-.light-mode .text-white svg,
-.light-mode .text-white\/80 svg {
+.light-mode .text-white:not(.bg-red-500, .bg-red-500 *,
+  .bg-blue-600, .bg-blue-600 *,
+  .bg-blue-500, .bg-blue-500 *,
+  .bg-green-500, .bg-green-500 *,
+  .bg-black, .bg-black *,
+  .bg-zinc-900, .bg-zinc-900 *) svg {
   color: var(--text-primary) !important;
 }
 
-/* Preserve specific brand colors */
-.light-mode .text-blue-500,
-.light-mode .text-orange-500,
-.light-mode .text-green-500,
+/* Preserve specific brand colors - Only override if absolutely necessary for readability */
+.light-mode .text-blue-500 {
+  color: #2563eb !important;
+}
+
+.light-mode .text-orange-500 {
+  color: #f97316 !important;
+}
+
+.light-mode .text-green-500 {
+  color: #16a34a !important;
+}
+
 .light-mode .text-red-500 {
-  color: inherit !important;
+  color: #dc2626 !important;
 }
 
 /* Header specific - invert logo back */
