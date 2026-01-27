@@ -14,6 +14,7 @@ export function WishlistProvider({ children }) {
     const [followRequests, setFollowRequests] = useState([]);
     const [sentFollowRequests, setSentFollowRequests] = useState([]);
     const [orders, setOrders] = useState([]);
+    const [friends, setFriends] = useState([]);
 
     // Initial Auth listener
     useEffect(() => {
@@ -151,6 +152,18 @@ export function WishlistProvider({ children }) {
             if (fData) {
                 follows = fData;
                 setFollowing(follows.map(f => f.friend_id));
+
+                // Fetch full friend profiles for the gift modal
+                const friendIds = follows.map(f => f.friend_id);
+                if (friendIds.length > 0) {
+                    const { data: friendProfiles } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .in('id', friendIds);
+                    if (friendProfiles) {
+                        setFriends(friendProfiles);
+                    }
+                }
             }
 
             // 4. Fetch Orders
@@ -483,6 +496,7 @@ export function WishlistProvider({ children }) {
             updateProfile,
             toggleFollow,
             following,
+            friends,
             orders,
             placeOrder,
             isLoggedIn,

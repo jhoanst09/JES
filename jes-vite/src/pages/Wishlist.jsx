@@ -189,9 +189,24 @@ export default function Wishlist() {
                                 </Link>
                                 <button
                                     onClick={() => toggleFollow(ownerProfile?.id)}
-                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-3 px-10 py-5 font-black rounded-3xl transition-all text-sm uppercase tracking-widest shadow-xl active:scale-95 border border-black/5 dark:border-white/5 ${following.includes(ownerProfile?.id) ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500' : 'bg-black dark:bg-white text-white dark:text-black hover:opacity-80'}`}
+                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-3 px-10 py-5 font-black rounded-3xl transition-all text-sm uppercase tracking-widest shadow-xl active:scale-95 border border-black/5 dark:border-white/5 ${following.includes(ownerProfile?.id) ? 'bg-green-500 text-white' : sentFollowRequests.includes(ownerProfile?.id) ? 'bg-amber-500 text-white' : 'bg-black dark:bg-white text-white dark:text-black hover:opacity-80'}`}
                                 >
-                                    {following.includes(ownerProfile?.id) ? '✓ Siguiendo' : sentFollowRequests.includes(ownerProfile?.id) ? '⌛ Pendiente' : 'Seguir 🤝'}
+                                    {following.includes(ownerProfile?.id) ? (
+                                        <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                                            Amigos ✓
+                                        </>
+                                    ) : sentFollowRequests.includes(ownerProfile?.id) ? (
+                                        <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                                            Solicitud Enviada
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" x2="19" y1="8" y2="14" /><line x1="22" x2="16" y1="11" y2="11" /></svg>
+                                            Añadir Amigo
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         )}
