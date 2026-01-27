@@ -389,7 +389,11 @@ export function WishlistProvider({ children }) {
     };
 
     const toggleFollow = async (friendId) => {
-        if (!isLoggedIn || !session?.user?.id) return;
+        if (!isLoggedIn) {
+            alert('¡Hola! Debes iniciar sesión para añadir amigos. 💡');
+            return;
+        }
+        if (!session?.user?.id) return;
 
         setSocialLoading(prev => ({ ...prev, [friendId]: true }));
         try {

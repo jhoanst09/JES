@@ -167,14 +167,6 @@ export default function Profile() {
         if (!loading) setInitialLoad(false);
     }, [loading]);
 
-    if (initialLoad) {
-        return (
-            <div className="min-h-screen flex flex-col items-center justify-center gap-6">
-                <div className="w-16 h-16 border-4 border-zinc-800 border-t-blue-500 rounded-full animate-spin"></div>
-                <p className="text-zinc-500 font-black uppercase tracking-[0.3em] text-[10px]">Cargando perfil...</p>
-            </div>
-        );
-    }
 
     if (!isLoggedIn) {
         return (
