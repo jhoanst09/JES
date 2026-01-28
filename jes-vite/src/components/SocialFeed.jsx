@@ -134,31 +134,6 @@ const PostCard = memo(function PostCard({
 
 
 const MOCK_POSTS = [];
-const DELETED_MOCKS = [
-    {
-        id: 'p1',
-        userId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
-        user: 'jhoanstmer09',
-        avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=150',
-        content: '¡Increíble! Este Funko de Gojo se ve genial 🔥. Ya lo tengo en mi colección, ¡qué elegancia!',
-        time: 'Hace 2h',
-        likes: 24,
-        comments: 5,
-        isLiked: false
-    },
-    {
-        id: 'p2',
-        userId: 'e1234567-e89b-12d3-a456-426614174000',
-        user: 'laura_vibe',
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
-        content: 'Buscando un regalo para mi novio... ¿El iPhone 17 Pro o el espejo Blonde? 🤔',
-        time: 'Hace 5h',
-        image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&q=80&w=800',
-        likes: 12,
-        comments: 8,
-        isLiked: false
-    }
-];
 
 export default function SocialFeed({ profileUserId = null }) {
     const { isLoggedIn, session, userProfile } = useWishlist();
