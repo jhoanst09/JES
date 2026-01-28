@@ -11,11 +11,16 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Home() {
-    const [feedType, setFeedType] = useState(() => {
-        // Force 'for-you' as default, override shop if it was saved to prioritize social
+    const [feedType, setFeedType] = useState('for-you');
+
+    useEffect(() => {
+        // En cada carga limpia del sitio, aseguramos que empiece en Para Ti si el usuario así lo prefiere
+        // Pero el estado inicial de JS ahora es hardcoded para evitar saltos
         const saved = localStorage.getItem('jes-feed-type');
-        return saved === 'shop' ? 'for-you' : (saved || 'for-you');
-    });
+        if (saved && saved !== 'shop') {
+            setFeedType(saved);
+        }
+    }, []);
 
     const handleFeedTypeChange = (type) => {
         setFeedType(type);

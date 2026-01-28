@@ -165,6 +165,9 @@ export default function SocialFeed({ profileUserId = null }) {
 
             if (postsError) {
                 console.error('❌ Error fetching posts:', postsError);
+                if (postsError.code === '42P01') {
+                    alert('⚠️ Error crítico: La tabla de posts no existe en la base de datos de Supabase. Debes ejecutar el script SQL.');
+                }
                 setPosts([]);
                 return;
             }
@@ -339,7 +342,8 @@ export default function SocialFeed({ profileUserId = null }) {
                     media_url: imageUrl,
                     created_at: new Date().toISOString()
                 })
-                .select();
+                .select()
+                .single(); // Ensure we get the single object back
 
             if (error) {
                 console.error('❌ Supabase error:', error);
@@ -349,11 +353,11 @@ export default function SocialFeed({ profileUserId = null }) {
             console.log('✅ Post creado en DB:', data);
 
             // Add to local state immediately for instant feedback
-            if (data && data[0]) {
+            if (data) {
                 const newPost = {
-                    id: data[0].id,
-                    userId: userProfile.id,
-                    user: userProfile.name || userProfile.email?.split('@')[0] || 'Usuario',
+                    id: data.id,
+                    userId: session.user.id,
+                    user: userProfile.name || session.user.email?.split('@')[0] || 'Usuario',
                     avatar: userProfile.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
                     content: input,
                     image: imageUrl,
@@ -445,6 +449,15 @@ export default function SocialFeed({ profileUserId = null }) {
 
     return (
         <div className="max-w-2xl mx-auto px-4 pb-32">
+            {/* Header Social Visual Verification */}
+            <div className="flex flex-col gap-2 mb-10">
+                <h2 className="text-4xl md:text-5xl font-black uppercase tracking-tighter italic">
+                    Para <span className="text-blue-600">Ti</span>
+                    <span className="ml-4 text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-full not-italic tracking-[0.2em] align-middle font-black shadow-lg shadow-blue-500/20">LIVE</span>
+                </h2>
+                <p className="text-zinc-500 dark:text-zinc-400 text-[10px] font-black uppercase tracking-[0.4em]">COMUNIDAD OFICIAL JES STORE</p>
+            </div>
+
             {/* Create Post Header - Solo si es el feed general o mi propio perfil */}
             {(!profileUserId || (profileUserId === session?.user?.id)) && (
                 !isLoggedIn ? (
