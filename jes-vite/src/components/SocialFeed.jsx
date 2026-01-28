@@ -173,9 +173,12 @@ export default function SocialFeed({ profileUserId = null }) {
 
     useEffect(() => {
         const fetchPosts = async () => {
+            console.log('🔄 Fetching posts...');
+
+            // Fetch posts without join first (more reliable)
             let query = supabase
                 .from('posts')
-                .select('*, profiles(name, avatar_url)')
+                .select('*')
                 .order('created_at', { ascending: false });
 
             if (profileUserId) {
@@ -185,34 +188,21 @@ export default function SocialFeed({ profileUserId = null }) {
             const { data: postsData, error: postsError } = await query;
 
             if (postsError) {
-                console.error('CRITICAL: Error fetching posts:', postsError);
-                // Si el error es sobre relaciones, intentamos sin join
-                if (postsError.message?.includes('relationship') || postsError.message?.includes('profiles')) {
-                    const { data: rawPosts, error: rawError } = await supabase
-                        .from('posts')
-                        .select('*')
-                        .order('created_at', { ascending: false });
-
-                    if (!rawError) {
-                        setPosts(rawPosts.map(p => ({
-                            id: p.id,
-                            userId: p.user_id,
-                            user: 'Usuario',
-                            content: p.content,
-                            image: p.media_url,
-                            time: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Recientemente',
-                            likes: p.likes_count || 0,
-                            comments: p.comments_count || 0,
-                            isLiked: false
-                        })));
-                        return;
-                    }
-                }
+                console.error('❌ Error fetching posts:', postsError);
+                // Only show mocks on error so the UI isn't empty, but log the error clearly
                 setPosts(MOCK_POSTS);
                 return;
             }
 
-            // 2. Fetch User Likes if logged in
+            console.log('✅ Posts fetched:', postsData?.length || 0);
+
+            if (!postsData || postsData.length === 0) {
+                console.log('📭 No hay publicaciones en la base de datos.');
+                setPosts([]); // Show empty state instead of mocks when database is truly empty
+                return;
+            }
+
+            // Fetch user likes if logged in
             let userLikedPostIds = new Set();
             if (isLoggedIn && userProfile?.id) {
                 const { data: likesData } = await supabase
@@ -225,9 +215,24 @@ export default function SocialFeed({ profileUserId = null }) {
                 }
             }
 
-            // 3. Format with isLiked status
-            const formatted = (postsData || []).map(p => {
-                const profile = p.profiles;
+            // Fetch profiles separately for each post
+            const userIds = [...new Set(postsData.map(p => p.user_id).filter(Boolean))];
+            let profilesMap = {};
+
+            if (userIds.length > 0) {
+                const { data: profilesData } = await supabase
+                    .from('profiles')
+                    .select('id, name, avatar_url')
+                    .in('id', userIds);
+
+                if (profilesData) {
+                    profilesMap = Object.fromEntries(profilesData.map(p => [p.id, p]));
+                }
+            }
+
+            // Format posts with profile info
+            const formatted = postsData.map(p => {
+                const profile = profilesMap[p.user_id];
                 return {
                     id: p.id,
                     userId: p.user_id,
@@ -235,7 +240,7 @@ export default function SocialFeed({ profileUserId = null }) {
                     avatar: profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
                     content: p.content,
                     image: p.media_url,
-                    time: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Recientemente',
+                    time: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Ahora',
                     likes: p.likes_count || 0,
                     comments: p.comments_count || 0,
                     isLiked: userLikedPostIds.has(p.id)
@@ -259,7 +264,7 @@ export default function SocialFeed({ profileUserId = null }) {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [profileUserId, isLoggedIn]); // Reducidas dependencias para evitar loops
+    }, [profileUserId, isLoggedIn]);
 
     const fetchComments = async (postId) => {
         if (loadingComments[postId]) return;
@@ -267,31 +272,51 @@ export default function SocialFeed({ profileUserId = null }) {
         setLoadingComments(prev => ({ ...prev, [postId]: true }));
 
         try {
-            const { data, error } = await supabase
+            // Fetch comments without join first
+            const { data: commentsData, error } = await supabase
                 .from('post_comments')
-                .select('*, profiles(name, avatar_url)')
+                .select('*')
                 .eq('post_id', postId)
                 .order('created_at', { ascending: true });
 
             if (error) {
                 console.error('Error fetching comments:', error);
-                // Intento sin join si falla por perfiles
-                const { data: rawData, error: rawErr } = await supabase
-                    .from('post_comments')
-                    .select('*')
-                    .eq('post_id', postId)
-                    .order('created_at', { ascending: true });
-
-                if (!rawErr) {
-                    setComments(prev => ({ ...prev, [postId]: rawData || [] }));
-                    return;
-                }
-                throw error;
+                setComments(prev => ({ ...prev, [postId]: [] }));
+                return;
             }
+
+            if (!commentsData || commentsData.length === 0) {
+                setComments(prev => ({ ...prev, [postId]: [] }));
+                return;
+            }
+
+            // Fetch profiles separately
+            const userIds = [...new Set(commentsData.map(c => c.user_id).filter(Boolean))];
+            let profilesMap = {};
+
+            if (userIds.length > 0) {
+                const { data: profilesData } = await supabase
+                    .from('profiles')
+                    .select('id, name, avatar_url')
+                    .in('id', userIds);
+
+                if (profilesData) {
+                    profilesMap = Object.fromEntries(profilesData.map(p => [p.id, p]));
+                }
+            }
+
+            // Format comments with profile info
+            const formatted = commentsData.map(c => ({
+                ...c,
+                profiles: profilesMap[c.user_id] || { name: 'Usuario', avatar_url: null }
+            }));
+
+            setComments(prev => ({ ...prev, [postId]: formatted }));
         } finally {
             setLoadingComments(prev => ({ ...prev, [postId]: false }));
         }
     };
+
 
     useEffect(() => {
         if (commentingOn) {
@@ -371,8 +396,10 @@ export default function SocialFeed({ profileUserId = null }) {
                 fileInputRef.current.value = '';
             }
         } catch (error) {
-            console.error('Error posting:', error);
-            alert(`Error: ${error.message || 'No se pudo publicar. Verifica que las tablas existan en Supabase.'}`);
+            console.error('❌ Error posting:', error);
+            // Better error reporting
+            const msg = error.message || 'Error desconocido';
+            alert(`Error al publicar: ${msg}\n\nDetalles en la consola.`);
         } finally {
             setIsPosting(false);
         }
@@ -393,13 +420,21 @@ export default function SocialFeed({ profileUserId = null }) {
         ));
 
         try {
+            console.log(`👍 Toggling like for post ${postId}...`);
             if (isLiked) {
-                await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', userProfile?.id);
+                const { error } = await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', session.user.id);
+                if (error) throw error;
             } else {
-                await supabase.from('post_likes').insert({ post_id: postId, user_id: userProfile?.id });
+                const { error } = await supabase.from('post_likes').insert({ post_id: postId, user_id: session.user.id });
+                if (error) throw error;
             }
+            console.log('✅ Like toggled successfully');
         } catch (error) {
-            console.error('Error toggling like:', error);
+            console.error('❌ Error toggling like:', error);
+            // Revert optimistic UI on error
+            setPosts(prev => prev.map(p =>
+                p.id === postId ? { ...p, likes: isLiked ? p.likes + 1 : p.likes - 1, isLiked: isLiked } : p
+            ));
         }
     };
 
@@ -510,20 +545,28 @@ export default function SocialFeed({ profileUserId = null }) {
 
             {/* Posts Grid - Optimized with memoized components */}
             <div className="space-y-6">
-                {posts.map((post) => (
-                    <PostCard
-                        key={post.id}
-                        post={post}
-                        toggleLike={toggleLike}
-                        commentingOn={commentingOn}
-                        setCommentingOn={setCommentingOn}
-                        commentInput={commentInput}
-                        setCommentInput={setCommentInput}
-                        handleComment={handleComment}
-                        comments={comments}
-                        loadingComments={loadingComments}
-                    />
-                ))}
+                {posts.length > 0 ? (
+                    posts.map((post) => (
+                        <PostCard
+                            key={post.id}
+                            post={post}
+                            toggleLike={toggleLike}
+                            commentingOn={commentingOn}
+                            setCommentingOn={setCommentingOn}
+                            commentInput={commentInput}
+                            setCommentInput={setCommentInput}
+                            handleComment={handleComment}
+                            comments={comments}
+                            loadingComments={loadingComments}
+                        />
+                    ))
+                ) : (
+                    <div className="py-20 text-center space-y-4 bg-zinc-50 dark:bg-zinc-900/30 rounded-[40px] border border-dashed border-black/5 dark:border-white/10">
+                        <span className="text-5xl block mb-2 opacity-20">✨</span>
+                        <h3 className="text-xl font-black text-zinc-400 dark:text-zinc-600 uppercase tracking-tighter italic">La comunidad espera...</h3>
+                        <p className="text-zinc-500 dark:text-zinc-500 font-bold uppercase text-[10px] tracking-[0.3em]">Sé el primero en compartir algo</p>
+                    </div>
+                )}
             </div>
         </div>
     );

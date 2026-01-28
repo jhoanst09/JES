@@ -130,10 +130,12 @@ const GlassSurface = ({
             return false;
         }
 
+        // Disable heavy SVG filters on mobile or non-chrome browsers for performance
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const isWebkit = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
         const isFirefox = /Firefox/.test(navigator.userAgent);
 
-        if (isWebkit || isFirefox) {
+        if (isMobile || isWebkit || isFirefox) {
             return false;
         }
 
