@@ -39,6 +39,8 @@ export default function ProductCard({ emoji, nombre, precio, image, handle, clas
                         <img
                             src={image}
                             alt={nombre}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />
                     ) : (

@@ -2,26 +2,20 @@ import { useState, useEffect, useRef } from 'react';
 import Header from '../components/Header';
 import MobileTabBar from '../components/MobileTabBar';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const MOCK_CHATS = [
-    { id: 'bot', name: 'JES Bot', avatar: '🤖', lastMsg: 'Hola! Soy tu asistente...', type: 'bot', online: true },
-    { id: 'valen', name: 'Valentina G', avatar: '👸', lastMsg: 'Amigo, mira este espejo...', type: 'friend', online: true },
-    { id: 'jhoan', name: 'Jhoan St', avatar: '🤵', lastMsg: 'Ya pedí los Jordan!', type: 'friend', online: false },
-    { id: 'juan', name: 'Juan P', avatar: '🧔', lastMsg: 'Quedamos para el fifa?', type: 'friend', online: true },
-];
-
-const INITIAL_MESSAGES = {
-    bot: [{ id: 1, sender: 'JES Bot', text: '¡Qué hubo! Soy tu asistente JES. ¿En qué te puedo ayudar hoy? 🤖', time: '10:00 AM' }],
-    valen: [{ id: 1, sender: 'Valentina G', text: 'Parce, pilla este espejo retro que está en la tienda, ¡está brutal! 🪞', time: '11:30 AM' }],
-    jhoan: [{ id: 1, sender: 'Jhoan St', text: '¿Viste que llegaron de nuevo las hoodies negras?', time: 'Ayer' }],
-    juan: [],
-};
-
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../services/supabase';
 import { useWishlist } from '../context/WishlistContext';
 import { chatWithAI } from '../services/ai';
 import { getProducts } from '../services/shopify';
+import {
+    generateConversationKey,
+    encryptMessage,
+    decryptMessage,
+    generateSessionKey,
+    exportKey,
+    importKey
+} from '../services/crypto';
+
 
 export default function Chat() {
     const { session, friends, isLoggedIn } = useWishlist();
@@ -33,6 +27,9 @@ export default function Chat() {
     const [input, setInput] = useState('');
     const [onlineUsers, setOnlineUsers] = useState([]);
     const scrollRef = useRef(null);
+    const [encryptionKeys, setEncryptionKeys] = useState({}); // { recipientId: { userKey, sessionKey } }
+    const [encryptionEnabled, setEncryptionEnabled] = useState(true);
+
 
     // Map friends to chat format
     const chatList = [
@@ -93,7 +90,21 @@ export default function Chat() {
     useEffect(() => {
         if (!activeChat || activeChat.id === 'bot' || !session?.user?.id) return;
 
-        async function fetchMessages() {
+        async function initEncryptionAndFetchMessages() {
+            // Initialize encryption keys for this conversation
+            try {
+                const conversationKey = await generateConversationKey(session.user.id, activeChat.id);
+                const sessionKey = await generateSessionKey();
+                setEncryptionKeys(prev => ({
+                    ...prev,
+                    [activeChat.id]: { userKey: conversationKey, sessionKey }
+                }));
+            } catch (err) {
+                console.warn('Encryption init failed, using plaintext:', err);
+                setEncryptionEnabled(false);
+            }
+
+            // Fetch messages
             const { data, error } = await supabase
                 .from('messages')
                 .select('*')
@@ -101,19 +112,38 @@ export default function Chat() {
                 .order('created_at', { ascending: true });
 
             if (data) {
-                setMessages(prev => ({
-                    ...prev,
-                    [activeChat.id]: data.map(m => ({
+                // Decrypt messages if they are encrypted
+                const decryptedMessages = await Promise.all(data.map(async (m) => {
+                    let text = m.content;
+
+                    // Check if message is encrypted (starts with encryption marker)
+                    if (m.is_encrypted && encryptionKeys[activeChat.id]) {
+                        try {
+                            const { userKey, sessionKey } = encryptionKeys[activeChat.id];
+                            text = await decryptMessage(m.content, userKey, sessionKey);
+                        } catch (e) {
+                            text = '[Mensaje cifrado]';
+                        }
+                    }
+
+                    return {
                         id: m.id,
                         sender: m.sender_id === session.user.id ? 'Yo' : activeChat.name,
-                        text: m.content,
-                        time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    }))
+                        text,
+                        time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        isEncrypted: m.is_encrypted
+                    };
+                }));
+
+                setMessages(prev => ({
+                    ...prev,
+                    [activeChat.id]: decryptedMessages
                 }));
             }
         }
 
-        fetchMessages();
+        initEncryptionAndFetchMessages();
+
 
         // Subscribe to real-time messages
         const channel = supabase
@@ -180,13 +210,39 @@ export default function Chat() {
             return;
         }
 
-        // Real Message Logic
+        // Real Message Logic - Encrypt before sending
+        let contentToSend = text;
+        let isEncrypted = false;
+
+        if (encryptionEnabled && encryptionKeys[activeChat.id]) {
+            try {
+                const { userKey, sessionKey } = encryptionKeys[activeChat.id];
+                contentToSend = await encryptMessage(text, userKey, sessionKey);
+                isEncrypted = true;
+            } catch (err) {
+                console.warn('Encryption failed, sending plaintext:', err);
+            }
+        }
+
+        // Optimistic UI update
+        setMessages(prev => ({
+            ...prev,
+            [activeChat.id]: [...(prev[activeChat.id] || []), {
+                id: Date.now(),
+                sender: 'Yo',
+                text: text, // Show original text locally
+                time: 'Ahora',
+                isEncrypted
+            }]
+        }));
+
         const { error } = await supabase
             .from('messages')
             .insert({
                 sender_id: session.user.id,
                 receiver_id: activeChat.id,
-                content: text
+                content: contentToSend,
+                is_encrypted: isEncrypted
             });
 
         if (error) {

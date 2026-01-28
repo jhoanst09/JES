@@ -2,11 +2,6 @@ const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || "google/learnlm-1.5-pro-experimental:free";
 
 export async function chatWithAI(messages, productContext = []) {
-    if (!OPENROUTER_API_KEY) {
-        console.warn("VITE_OPENROUTER_API_KEY is missing in .env");
-        return "¡Error! Falta la API Key. Contacta al administrador.";
-    }
-
     const systemPrompt = `
 Eres "JARVIS" (Just A Rather Very Intelligent System), el asistente virtual de JES Store.
 
@@ -38,32 +33,28 @@ ${JSON.stringify(productContext.map(p => ({ title: p.title, handle: p.handle, pr
 `;
 
     try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const response = await fetch("/api/chat", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://jes-store.com",
-                "X-Title": "JES Store Assistant",
             },
             body: JSON.stringify({
-                "model": OPENROUTER_MODEL,
-                "messages": [
-                    { "role": "system", "content": systemPrompt },
-                    ...messages
-                ],
+                model: OPENROUTER_MODEL,
+                systemPrompt: systemPrompt,
+                messages: messages
             })
         });
 
         const data = await response.json();
 
         if (data.error) {
-            console.error("OpenRouter Error:", data.error);
-            return `¡Vaya! El sistema dice: \"${data.error.message || 'error desconocido'}\". Por favor verifica la configuración.`;
+            console.error("AI Error:", data.error);
+            return `¡Vaya! El sistema dice: "${data.error.message || data.error || 'error desconocido'}". Por favor verifica la configuración.`;
         }
 
         return data.choices?.[0]?.message?.content || "Lo siento, no pude procesar tu solicitud. Por favor intenta de nuevo.";
     } catch (error) {
         console.error("AI Assistant Error:", error);
+        return "Error de conexión con JARVIS.";
     }
 }

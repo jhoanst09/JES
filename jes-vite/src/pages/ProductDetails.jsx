@@ -11,6 +11,7 @@ import { useCart } from '../context/CartContext';
 import VirtualMirror from '../components/VirtualMirror';
 import PurchaseTerminal from '../components/PurchaseTerminal';
 import { useTerminal } from '../context/TerminalContext';
+import DOMPurify from 'dompurify';
 
 export default function ProductDetails() {
     const { handle } = useParams();
@@ -168,7 +169,7 @@ export default function ProductDetails() {
                         </div>
 
                         <div className="space-y-6">
-                            <div className="prose dark:prose-invert prose-sm max-w-none text-zinc-600 dark:text-zinc-400 leading-relaxed transition-colors" dangerouslySetInnerHTML={{ __html: product.descriptionHtml || product.description }} />
+                            <div className="prose dark:prose-invert prose-sm max-w-none text-zinc-600 dark:text-zinc-400 leading-relaxed transition-colors" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(product.descriptionHtml || product.description) }} />
 
                             <div className="flex flex-wrap gap-2 pt-4">
                                 {product.tags.map(tag => (

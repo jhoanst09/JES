@@ -1,11 +1,10 @@
 /**
  * Cloudinary Service for JES Store
- * Handles URL generation and simulated uploads.
- * TIP: For premium Community Videos, we use VMAF (Video Multi-Method Assessment Fusion)
- * to ensure that user uploads maintain visual quality while minimizing bandwidth.
+ * Handles image uploads and URL generation.
  */
 
-const CLOUD_NAME = 'jes-store'; // Placeholder for the user's cloud name
+const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'demo';
+const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
 
 /**
  * Generates a Cloudinary URL with transformations
@@ -27,19 +26,65 @@ export const getCloudinaryUrl = (publicId, options = {}) => {
 };
 
 /**
- * Simulates an upload to Cloudinary
- * In a real app, this would use the Upload API or the Upload Widget
+ * Upload a file to Cloudinary using unsigned upload
+ * @param {File} file - The file to upload
+ * @returns {Promise<{public_id: string, secure_url: string, format: string, resource_type: string}>}
  */
 export const uploadToCloudinary = async (file) => {
-    console.log('Simulating Cloudinary upload for:', file.name);
+    if (!CLOUD_NAME || CLOUD_NAME === 'demo') {
+        console.warn('Cloudinary not configured. Using local fallback.');
+        // Return a local URL for development
+        return {
+            public_id: `local_${Date.now()}`,
+            secure_url: URL.createObjectURL(file),
+            format: file.type.split('/')[1],
+            resource_type: file.type.startsWith('video') ? 'video' : 'image'
+        };
+    }
 
-    // Simulate delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', UPLOAD_PRESET);
+    formData.append('folder', 'jes-community');
 
-    return {
-        public_id: `jes_user_post_${Date.now()}`,
-        secure_url: URL.createObjectURL(file), // Local URL for immediate display
-        format: file.type.split('/')[1],
-        resource_type: file.type.startsWith('video') ? 'video' : 'image'
-    };
+    try {
+        const response = await fetch(
+            `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`,
+            {
+                method: 'POST',
+                body: formData
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`Upload failed: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        return {
+            public_id: data.public_id,
+            secure_url: data.secure_url,
+            format: data.format,
+            resource_type: data.resource_type
+        };
+    } catch (error) {
+        console.error('Cloudinary upload error:', error);
+        // Fallback to local URL
+        return {
+            public_id: `fallback_${Date.now()}`,
+            secure_url: URL.createObjectURL(file),
+            format: file.type.split('/')[1],
+            resource_type: file.type.startsWith('video') ? 'video' : 'image'
+        };
+    }
+};
+
+/**
+ * Delete an image from Cloudinary (requires server-side implementation)
+ * Note: This is just a placeholder - actual deletion requires signed requests
+ */
+export const deleteFromCloudinary = async (publicId) => {
+    console.warn('Cloudinary deletion requires server-side implementation with signed requests.');
+    return { success: false, message: 'Server-side deletion not implemented' };
 };

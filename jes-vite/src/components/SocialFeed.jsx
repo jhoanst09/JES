@@ -1,10 +1,137 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, memo, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import { uploadToCloudinary } from '../services/cloudinary';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { useWishlist } from '../context/WishlistContext';
 import { Link } from 'react-router-dom';
+
+// Memoized Post Component for performance
+const PostCard = memo(function PostCard({
+    post,
+    toggleLike,
+    commentingOn,
+    setCommentingOn,
+    commentInput,
+    setCommentInput,
+    handleComment,
+    comments,
+    loadingComments
+}) {
+    return (
+        <div className="bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-[40px] overflow-hidden shadow-xl transition-transform duration-300">
+            <div className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                    <Link to={`/wishlist?user=${post.userId || ''}`} className="flex gap-4 group/avatar">
+                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-transparent group-hover/avatar:border-blue-500 transition-all">
+                            <img
+                                src={post.avatar}
+                                className="w-full h-full object-cover"
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                            />
+                        </div>
+                        <div>
+                            <h4 className="font-black text-zinc-900 dark:text-white lowercase group-hover/avatar:text-blue-500 transition-colors">@{post.user?.name || post.user}</h4>
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{post.time}</p>
+                        </div>
+                    </Link>
+                    <button className="text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">•••</button>
+                </div>
+
+                <p className="text-zinc-800 dark:text-zinc-200 text-lg mb-4 leading-relaxed font-medium">
+                    {post.content}
+                </p>
+
+                {post.image && (
+                    <div className="rounded-[32px] overflow-hidden mb-4 border border-black/5 dark:border-white/5">
+                        <img
+                            src={post.image}
+                            className="w-full object-cover max-h-[400px]"
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                        />
+                    </div>
+                )}
+
+                <div className="flex gap-8 border-t border-black/5 dark:border-white/5 pt-4">
+                    <button
+                        onClick={() => toggleLike(post.id)}
+                        className={`flex items-center gap-2 transition-all active:scale-125 ${post.isLiked ? 'text-red-500' : 'text-zinc-600 dark:text-zinc-500 hover:text-red-500'}`}
+                    >
+                        {post.isLiked ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-red-500"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
+                        ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
+                        )}
+                        <span className="text-xs font-black text-zinc-700 dark:text-zinc-300">{post.likes}</span>
+                    </button>
+                    <button
+                        onClick={() => setCommentingOn(commentingOn === post.id ? null : post.id)}
+                        className="flex items-center gap-2 text-zinc-600 dark:text-zinc-500 hover:text-blue-500 transition-all"
+                    >
+                        <span className="text-xl">💬</span>
+                        <span className="text-xs font-black text-zinc-700 dark:text-zinc-300">{post.comments}</span>
+                    </button>
+                    <button className="flex items-center gap-2 text-zinc-500 hover:text-green-500 transition-colors ml-auto">
+                        <span className="text-xl">🔗</span>
+                    </button>
+                </div>
+
+                {/* Comments Section - CSS-based animation for performance */}
+                <div className={`overflow-hidden transition-all duration-300 ease-out border-t border-black/5 dark:border-white/5 mt-4 ${commentingOn === post.id ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 border-t-0'
+                    }`}>
+                    <div className="py-4 space-y-4">
+                        {loadingComments[post.id] ? (
+                            <p className="text-center text-[10px] text-zinc-500 font-bold uppercase tracking-widest animate-pulse">Cargando comentarios...</p>
+                        ) : comments[post.id]?.length > 0 ? (
+                            comments[post.id].map(comment => (
+                                <div key={comment.id} className="flex gap-3">
+                                    <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
+                                        <img
+                                            src={comment.profiles?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'}
+                                            className="w-full h-full object-cover"
+                                            alt=""
+                                            loading="lazy"
+                                        />
+                                    </div>
+                                    <div className="flex-1 bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-2xl border border-black/5 dark:border-white/5">
+                                        <p className="text-[10px] font-black text-zinc-900 dark:text-white capitalize mb-1">{comment.profiles?.name || 'Usuario'}</p>
+                                        <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-tight">{comment.content}</p>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-center text-[10px] text-zinc-500 font-bold uppercase tracking-widest py-2">Sé el primero en comentar ✨</p>
+                        )}
+                    </div>
+
+                    {/* Comment Input */}
+                    <div className="pt-2 flex gap-3 pb-4">
+                        <input
+                            type="text"
+                            placeholder="Escribe un comentario..."
+                            value={commentInput}
+                            onChange={(e) => setCommentInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id)}
+                            className="flex-1 bg-zinc-100 dark:bg-zinc-800 border-none rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-white outline-none ring-1 ring-black/5 dark:ring-white/10 focus:ring-blue-500/50 transition-all font-medium placeholder:text-zinc-500"
+                        />
+                        <button
+                            onClick={() => handleComment(post.id)}
+                            disabled={!commentInput.trim()}
+                            className="bg-zinc-900 dark:bg-white text-white dark:text-black font-black text-[10px] uppercase tracking-widest px-6 rounded-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                        >
+                            Enviar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+});
+
 
 const MOCK_POSTS = [
     {
@@ -381,119 +508,21 @@ export default function SocialFeed({ profileUserId = null }) {
                 )
             )}
 
-            {/* Posts Grid */}
+            {/* Posts Grid - Optimized with memoized components */}
             <div className="space-y-6">
                 {posts.map((post) => (
-                    <motion.div
+                    <PostCard
                         key={post.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-[40px] overflow-hidden shadow-2xl"
-                    >
-                        <div className="p-6">
-                            <div className="flex justify-between items-start mb-4">
-                                <Link to={`/wishlist?user=${post.userId || ''}`} className="flex gap-4 group/avatar">
-                                    <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-transparent group-hover/avatar:border-blue-500 transition-all">
-                                        <img src={post.avatar} className="w-full h-full object-cover" alt="" />
-                                    </div>
-                                    <div>
-                                        <h4 className="font-black text-zinc-900 dark:text-white lowercase group-hover/avatar:text-blue-500 transition-colors">@{post.user?.name || post.user}</h4>
-                                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{post.time}</p>
-                                    </div>
-                                </Link>
-                                <button className="text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">•••</button>
-                            </div>
-
-                            <p className="text-zinc-800 dark:text-zinc-200 text-lg mb-4 leading-relaxed font-medium">
-                                {post.content}
-                            </p>
-
-                            {post.image && (
-                                <div className="rounded-[32px] overflow-hidden mb-4 border border-black/5 dark:border-white/5 shadow-inner">
-                                    <img src={post.image} className="w-full object-cover max-h-[400px]" alt="" />
-                                </div>
-                            )}
-
-                            <div className="flex gap-8 border-t border-black/5 dark:border-white/5 pt-4">
-                                <button
-                                    onClick={() => toggleLike(post.id)}
-                                    className={`flex items-center gap-2 transition-all active:scale-125 ${post.isLiked ? 'text-red-500' : 'text-zinc-600 dark:text-zinc-500 hover:text-red-500'}`}
-                                >
-                                    {post.isLiked ? (
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-red-500"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
-                                    ) : (
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
-                                    )}
-                                    <span className="text-xs font-black text-zinc-700 dark:text-zinc-300">{post.likes}</span>
-                                </button>
-                                <button
-                                    onClick={() => setCommentingOn(commentingOn === post.id ? null : post.id)}
-                                    className="flex items-center gap-2 text-zinc-600 dark:text-zinc-500 hover:text-blue-500 transition-all"
-                                >
-                                    <span className="text-xl">💬</span>
-                                    <span className="text-xs font-black text-zinc-700 dark:text-zinc-300">{post.comments}</span>
-                                </button>
-                                <button className="flex items-center gap-2 text-zinc-500 hover:text-green-500 transition-colors ml-auto">
-                                    <span className="text-xl">🔗</span>
-                                </button>
-                            </div>
-
-                            {/* Comment Input */}
-                            {/* Comments Section */}
-                            <AnimatePresence>
-                                {commentingOn === post.id && (
-                                    <motion.div
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        className="overflow-hidden border-t border-black/5 dark:border-white/5 mt-4"
-                                    >
-                                        {/* Existing Comments List */}
-                                        <div className="py-4 space-y-4">
-                                            {loadingComments[post.id] ? (
-                                                <p className="text-center text-[10px] text-zinc-500 font-bold uppercase tracking-widest animate-pulse">Cargando comentarios...</p>
-                                            ) : comments[post.id]?.length > 0 ? (
-                                                comments[post.id].map(comment => (
-                                                    <div key={comment.id} className="flex gap-3">
-                                                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
-                                                            <img src={comment.profiles?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'} className="w-full h-full object-cover" alt="" />
-                                                        </div>
-                                                        <div className="flex-1 bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-2xl border border-black/5 dark:border-white/5">
-                                                            <p className="text-[10px] font-black text-zinc-900 dark:text-white capitalize mb-1">{comment.profiles?.name || 'Usuario'}</p>
-                                                            <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-tight">{comment.content}</p>
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <p className="text-center text-[10px] text-zinc-500 font-bold uppercase tracking-widest py-2">Sé el primero en comentar ✨</p>
-                                            )}
-                                        </div>
-
-                                        {/* Comment Input */}
-                                        <div className="pt-2 flex gap-3 pb-4">
-                                            <input
-                                                autoFocus
-                                                type="text"
-                                                placeholder="Escribe un comentario..."
-                                                value={commentInput}
-                                                onChange={(e) => setCommentInput(e.target.value)}
-                                                onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id)}
-                                                className="flex-1 bg-zinc-100 dark:bg-zinc-800 border-none rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-white outline-none ring-1 ring-black/5 dark:ring-white/10 focus:ring-blue-500/50 transition-all font-medium placeholder:text-zinc-500"
-                                            />
-                                            <button
-                                                onClick={() => handleComment(post.id)}
-                                                disabled={!commentInput.trim()}
-                                                className="bg-zinc-900 dark:bg-white text-white dark:text-black font-black text-[10px] uppercase tracking-widest px-6 rounded-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
-                                            >
-                                                Enviar
-                                            </button>
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    </motion.div>
+                        post={post}
+                        toggleLike={toggleLike}
+                        commentingOn={commentingOn}
+                        setCommentingOn={setCommentingOn}
+                        commentInput={commentInput}
+                        setCommentInput={setCommentInput}
+                        handleComment={handleComment}
+                        comments={comments}
+                        loadingComments={loadingComments}
+                    />
                 ))}
             </div>
         </div>
