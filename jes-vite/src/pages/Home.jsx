@@ -11,12 +11,13 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Home() {
-    // Default to 'for-you' as requested by the user for social focus
     const [feedType, setFeedType] = useState(() => {
+        // Force 'for-you' if no preference is saved, otherwise use saved.
         return localStorage.getItem('jes-feed-type') || 'for-you';
     });
 
     const handleFeedTypeChange = (type) => {
+        console.log('Changing feed to:', type);
         setFeedType(type);
         localStorage.setItem('jes-feed-type', type);
     };

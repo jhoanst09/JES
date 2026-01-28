@@ -133,7 +133,8 @@ const PostCard = memo(function PostCard({
 });
 
 
-const MOCK_POSTS = [
+const MOCK_POSTS = [];
+const DELETED_MOCKS = [
     {
         id: 'p1',
         userId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
@@ -189,13 +190,7 @@ export default function SocialFeed({ profileUserId = null }) {
 
             if (postsError) {
                 console.error('❌ Error fetching posts:', postsError);
-                // Table doesn't exist error (42P01)
-                if (postsError.code === '42P01') {
-                    console.warn('⚠️ La tabla "posts" no existe en Supabase. Mostrando datos de prueba.');
-                    setPosts(MOCK_POSTS);
-                } else {
-                    setPosts([]);
-                }
+                setPosts([]);
                 return;
             }
 
