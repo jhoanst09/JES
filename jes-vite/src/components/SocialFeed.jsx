@@ -33,7 +33,7 @@ const PostCard = memo(function PostCard({
                             />
                         </div>
                         <div>
-                            <h4 className="font-black text-zinc-900 dark:text-white lowercase group-hover/avatar:text-blue-500 transition-colors">@{post.user?.name || post.user}</h4>
+                            <h4 className="font-black text-zinc-900 dark:text-white lowercase group-hover/avatar:text-blue-500 transition-colors">@{post.user}</h4>
                             <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{post.time}</p>
                         </div>
                     </Link>
@@ -189,8 +189,12 @@ export default function SocialFeed({ profileUserId = null }) {
 
             if (postsError) {
                 console.error('❌ Error fetching posts:', postsError);
-                // Only show mocks on error so the UI isn't empty, but log the error clearly
-                setPosts(MOCK_POSTS);
+                // Only show mocks on FATAL error (like table not existing)
+                if (postsError.code === '42P01') {
+                    setPosts(MOCK_POSTS);
+                } else {
+                    setPosts([]);
+                }
                 return;
             }
 
@@ -359,7 +363,7 @@ export default function SocialFeed({ profileUserId = null }) {
             const { data, error } = await supabase
                 .from('posts')
                 .insert({
-                    user_id: session.user.id,
+                    user_id: userProfile.id || session.user.id,
                     content: input,
                     media_url: imageUrl,
                     created_at: new Date().toISOString()
