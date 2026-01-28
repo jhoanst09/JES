@@ -189,8 +189,9 @@ export default function SocialFeed({ profileUserId = null }) {
 
             if (postsError) {
                 console.error('❌ Error fetching posts:', postsError);
-                // Only show mocks on FATAL error (like table not existing)
+                // Table doesn't exist error (42P01)
                 if (postsError.code === '42P01') {
+                    console.warn('⚠️ La tabla "posts" no existe en Supabase. Mostrando datos de prueba.');
                     setPosts(MOCK_POSTS);
                 } else {
                     setPosts([]);
@@ -339,7 +340,7 @@ export default function SocialFeed({ profileUserId = null }) {
         if (!input.trim() && !selectedImage || isPosting) return;
 
         // Validar que el usuario está logueado
-        if (!userProfile?.id) {
+        if (!isLoggedIn || !session?.user) {
             alert('Debes iniciar sesión para publicar.');
             return;
         }
@@ -363,7 +364,7 @@ export default function SocialFeed({ profileUserId = null }) {
             const { data, error } = await supabase
                 .from('posts')
                 .insert({
-                    user_id: userProfile.id || session.user.id,
+                    user_id: session.user.id,
                     content: input,
                     media_url: imageUrl,
                     created_at: new Date().toISOString()
@@ -371,11 +372,11 @@ export default function SocialFeed({ profileUserId = null }) {
                 .select();
 
             if (error) {
-                console.error('Supabase error:', error);
+                console.error('❌ Supabase error:', error);
                 throw error;
             }
 
-            console.log('Post created:', data);
+            console.log('✅ Post creado en DB:', data);
 
             // Add to local state immediately for instant feedback
             if (data && data[0]) {

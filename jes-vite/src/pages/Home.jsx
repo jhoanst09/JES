@@ -11,7 +11,15 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Home() {
-    const [feedType, setFeedType] = useState('shop'); // 'for-you' | 'shop'
+    // Default to 'for-you' as requested by the user for social focus
+    const [feedType, setFeedType] = useState(() => {
+        return localStorage.getItem('jes-feed-type') || 'for-you';
+    });
+
+    const handleFeedTypeChange = (type) => {
+        setFeedType(type);
+        localStorage.setItem('jes-feed-type', type);
+    };
 
     return (
         <div className="min-h-screen overflow-x-hidden selection:bg-blue-500/30 bg-white dark:bg-black transition-colors duration-500">
@@ -21,13 +29,13 @@ export default function Home() {
             <div className="fixed top-24 left-0 right-0 z-40 flex justify-center pointer-events-none md:top-28">
                 <div className="bg-zinc-100/80 dark:bg-black/80 backdrop-blur-xl border border-black/5 dark:border-white/10 p-1 rounded-2xl flex items-center pointer-events-auto shadow-2xl">
                     <button
-                        onClick={() => setFeedType('for-you')}
+                        onClick={() => handleFeedTypeChange('for-you')}
                         className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${feedType === 'for-you' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'text-zinc-500 dark:text-white/40 hover:text-zinc-900 dark:hover:text-white'}`}
                     >
                         Para Ti
                     </button>
                     <button
-                        onClick={() => setFeedType('shop')}
+                        onClick={() => handleFeedTypeChange('shop')}
                         className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${feedType === 'shop' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xl' : 'text-zinc-500 dark:text-white/40 hover:text-zinc-900 dark:hover:text-white'}`}
                     >
                         Shop
