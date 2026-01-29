@@ -1,6 +1,7 @@
+'use client';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import ProductCard from './ProductCard';
 import { getCollectionProducts, getProducts } from '../services/shopify';
 
@@ -84,10 +85,10 @@ export default function ProductRowSection({
                         </p>
                     </div>
                     <Link
-                        to={viewAllRoute}
+                        href={viewAllRoute}
                         className="px-6 py-3 bg-white text-black font-bold rounded-full text-sm hover:scale-105 transition-transform whitespace-nowrap"
                     >
-                        Regalar Todo 🎁
+                        Ver Todo
                     </Link>
                 </div>
 

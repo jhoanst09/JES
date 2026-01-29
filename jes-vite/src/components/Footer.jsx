@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 
 export default function Footer() {
     return (
@@ -30,7 +30,7 @@ export default function Footer() {
                     <ul className="space-y-3">
                         {['Dispositivos', 'Ropa', 'Música', 'Streaming'].map(item => (
                             <li key={item}>
-                                <Link to={`/${item.toLowerCase().replace('ú', 'u')}`} className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">
+                                <Link href={`/${item.toLowerCase().replace('ú', 'u')}`} className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">
                                     {item}
                                 </Link>
                             </li>
@@ -42,10 +42,10 @@ export default function Footer() {
                 <div className="space-y-6">
                     <h4 className="text-white font-black text-xs uppercase tracking-[0.3em]">Jes Store</h4>
                     <ul className="space-y-3">
-                        <li><Link to="/about" className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">Sobre Nosotros</Link></li>
-                        <li><Link to="/community" className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">Comunidad</Link></li>
-                        <li><Link to="/profile" className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">Mi Perfil</Link></li>
-                        <li><Link to="/wishlist" className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">Lista de Deseos</Link></li>
+                        <li><Link href="/about" className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">Sobre Nosotros</Link></li>
+                        <li><Link href="/community" className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">Comunidad</Link></li>
+                        <li><Link href="/profile" className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">Mi Perfil</Link></li>
+                        <li><Link href="/wishlist" className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">Lista de Deseos</Link></li>
                     </ul>
                 </div>
 

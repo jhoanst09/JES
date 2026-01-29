@@ -1,5 +1,4 @@
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY;
-const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || "google/learnlm-1.5-pro-experimental:free";
+const OPENROUTER_MODEL = process.env.NEXT_PUBLIC_OPENROUTER_MODEL || process.env.VITE_OPENROUTER_MODEL || "google/learnlm-1.5-pro-experimental:free";
 
 export async function chatWithAI(messages, productContext = []) {
     const systemPrompt = `

@@ -1,5 +1,5 @@
-const domain = import.meta.env.VITE_SHOPIFY_STORE_DOMAIN;
-const storefrontAccessToken = import.meta.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN;
+const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN || process.env.VITE_SHOPIFY_STORE_DOMAIN;
+const storefrontAccessToken = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_ACCESS_TOKEN || process.env.VITE_SHOPIFY_STOREFRONT_ACCESS_TOKEN;
 
 if (!domain || !storefrontAccessToken) {
   console.error('CRITICAL: Shopify environment variables are missing!', {

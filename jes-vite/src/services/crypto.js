@@ -94,34 +94,24 @@ async function decryptLayer(ciphertext, key) {
 }
 
 /**
- * Double-layer encryption
+ * Encrypt a message using the conversation key
  * @param {string} message - The plaintext message
- * @param {CryptoKey} userKey - Layer 1 key (derived from user)
- * @param {CryptoKey} sessionKey - Layer 2 key (session-specific)
- * @returns {string} Base64 encoded double-encrypted message
+ * @param {CryptoKey} key - The shared conversation key
+ * @returns {string} Base64 encoded encrypted message
  */
-export async function encryptMessage(message, userKey, sessionKey) {
-    // Layer 1: Encrypt with user key
-    const layer1 = await encryptLayer(message, userKey);
-    // Layer 2: Encrypt with session key
-    const layer2 = await encryptLayer(layer1, sessionKey);
-    return layer2;
+export async function encryptMessage(message, key) {
+    return await encryptLayer(message, key);
 }
 
 /**
- * Double-layer decryption
- * @param {string} encryptedMessage - Base64 encoded double-encrypted message
- * @param {CryptoKey} userKey - Layer 1 key
- * @param {CryptoKey} sessionKey - Layer 2 key
+ * Decrypt a message using the conversation key
+ * @param {string} encryptedMessage - Base64 encoded encrypted message
+ * @param {CryptoKey} key - The shared conversation key
  * @returns {string} The original plaintext message
  */
-export async function decryptMessage(encryptedMessage, userKey, sessionKey) {
+export async function decryptMessage(encryptedMessage, key) {
     try {
-        // Layer 2: Decrypt with session key first
-        const layer1 = await decryptLayer(encryptedMessage, sessionKey);
-        // Layer 1: Decrypt with user key
-        const plaintext = await decryptLayer(layer1, userKey);
-        return plaintext;
+        return await decryptLayer(encryptedMessage, key);
     } catch (error) {
         console.error('Decryption failed:', error);
         return '[Mensaje cifrado - No se pudo descifrar]';

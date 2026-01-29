@@ -1,5 +1,7 @@
+'use client';
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import GlassSurface from './GlassSurface';
 import { getProducts } from '../services/shopify';
@@ -62,7 +64,7 @@ export default function Header() {
                         <div className="flex items-center justify-between w-full px-6">
                             {/* Logo */}
                             <div className="flex items-center shrink-0">
-                                <Link to="/" className="hover:scale-105 transition-transform active:scale-95">
+                                <Link href="/" className="hover:scale-105 transition-transform active:scale-95">
                                     <img
                                         src="/assets/logo.png"
                                         alt="JES"
@@ -74,7 +76,7 @@ export default function Header() {
                             {/* Right side utilities */}
                             <div className="flex items-center gap-2 shrink-0">
                                 <Link
-                                    to="/profile"
+                                    href="/profile"
                                     className="hidden md:flex p-2.5 text-zinc-600 dark:text-white/80 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-all relative active:scale-95"
                                     aria-label="Perfil"
                                 >
@@ -157,7 +159,7 @@ export default function Header() {
                             </div>
 
                             <nav className="space-y-8">
-                                <Link to="/community" onClick={() => setIsMenuOpen(false)} className="group flex items-center gap-4">
+                                <Link href="/community" onClick={() => setIsMenuOpen(false)} className="group flex items-center gap-4">
                                     <span className="text-2xl group-hover:scale-125 transition-transform">⚽</span>
                                     <div className="text-left">
                                         <p className="font-black text-zinc-900 dark:text-white uppercase tracking-tighter text-xl">Comunidad</p>
@@ -165,7 +167,7 @@ export default function Header() {
                                     </div>
                                 </Link>
 
-                                <Link to="/about" onClick={() => setIsMenuOpen(false)} className="group flex items-center gap-4">
+                                <Link href="/about" onClick={() => setIsMenuOpen(false)} className="group flex items-center gap-4">
                                     <span className="text-2xl group-hover:scale-125 transition-transform">ℹ️</span>
                                     <div className="text-left">
                                         <p className="font-black text-zinc-900 dark:text-white uppercase tracking-tighter text-xl">Nosotros</p>
@@ -174,8 +176,8 @@ export default function Header() {
                                 </Link>
 
                                 <div className="pt-8 border-t border-black/5 dark:border-white/10 space-y-6 text-zinc-400 dark:text-zinc-500 font-bold uppercase text-[10px] tracking-[0.2em]">
-                                    <Link to="/profile" onClick={() => setIsMenuOpen(false)} className="block hover:text-blue-500 transition-colors">Ajustes</Link>
-                                    <Link to="/reviews" onClick={() => setIsMenuOpen(false)} className="block hover:text-blue-500 transition-colors">Mis Reseñas</Link>
+                                    <Link href="/profile" onClick={() => setIsMenuOpen(false)} className="block hover:text-blue-500 transition-colors">Ajustes</Link>
+                                    <Link href="/reviews" onClick={() => setIsMenuOpen(false)} className="block hover:text-blue-500 transition-colors">Mis Reseñas</Link>
                                     <button className="block hover:text-red-500 cursor-pointer transition-colors text-left uppercase font-bold text-[10px]">Cerrar Sesión</button>
                                 </div>
                             </nav>

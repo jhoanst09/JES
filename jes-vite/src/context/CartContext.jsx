@@ -19,7 +19,7 @@ export function CartProvider({ children }) {
         localStorage.setItem('jes-cart', JSON.stringify(cart));
     }, [cart]);
 
-    const addToCart = async (product) => {
+    const addToCart = async (product, isGift = false) => {
         // If product doesn't have variantId, fetch it
         let variantId = product.variantId;
         if (!variantId && product.handle) {
@@ -27,27 +27,29 @@ export function CartProvider({ children }) {
             variantId = variantData?.variantId || null;
         }
 
+        const cartId = `${product.handle}${isGift ? '-gift' : ''}`;
+
         setCart(prev => {
-            const existing = prev.find(item => item.handle === product.handle);
+            const existing = prev.find(item => item.cartId === cartId);
             if (existing) {
                 return prev.map(item =>
-                    item.handle === product.handle
+                    item.cartId === cartId
                         ? { ...item, quantity: item.quantity + 1 }
                         : item
                 );
             }
-            return [...prev, { ...product, variantId, quantity: 1 }];
+            return [...prev, { ...product, variantId, quantity: 1, isGift, cartId }];
         });
         setIsCartOpen(true);
     };
 
-    const removeFromCart = (handle) => {
-        setCart(prev => prev.filter(item => item.handle !== handle));
+    const removeFromCart = (cartId) => {
+        setCart(prev => prev.filter(item => item.cartId !== cartId));
     };
 
-    const updateQuantity = (handle, delta) => {
+    const updateQuantity = (cartId, delta) => {
         setCart(prev => prev.map(item => {
-            if (item.handle === handle) {
+            if (item.cartId === cartId) {
                 const newQty = Math.max(1, item.quantity + delta);
                 return { ...item, quantity: newQty };
             }

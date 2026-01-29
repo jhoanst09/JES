@@ -1,5 +1,6 @@
+'use client';
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getProducts } from '../services/shopify';
 import Fuse from 'fuse.js';
@@ -8,7 +9,7 @@ export default function SearchModal({ isOpen, onClose }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
-    const navigate = useNavigate();
+    const router = useRouter();
 
     const popularTerms = ['Espejo Blonde', 'Nike Jordan', 'Vinilos', 'Flipper Zero', 'M5Stick', 'LPs', 'Sony WH-1000XM5'];
 
@@ -114,7 +115,7 @@ export default function SearchModal({ isOpen, onClose }) {
                                             <button
                                                 key={cat.name}
                                                 onClick={() => {
-                                                    navigate(cat.path);
+                                                    router.push(cat.path);
                                                     onClose();
                                                 }}
                                                 className="group flex items-center justify-between p-3 md:p-4 bg-zinc-100 dark:bg-white/5 hover:bg-black dark:hover:bg-white text-zinc-900 dark:text-white hover:text-white dark:hover:text-black rounded-2xl transition-all duration-300"
@@ -166,7 +167,7 @@ export default function SearchModal({ isOpen, onClose }) {
                                                 <button
                                                     key={p.id}
                                                     onClick={() => {
-                                                        navigate(`/product/${p.handle}`);
+                                                        router.push(`/product/${p.handle}`);
                                                         onClose();
                                                     }}
                                                     className="flex items-center gap-4 w-full p-4 bg-zinc-100 dark:bg-zinc-900/50 hover:bg-black dark:hover:bg-white rounded-3xl transition-all group text-left border border-black/5 dark:border-white/5 hover:border-black dark:hover:border-white shadow-xl"

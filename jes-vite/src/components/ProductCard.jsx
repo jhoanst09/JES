@@ -1,5 +1,7 @@
+'use client';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
+import Image from 'next/image';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 
@@ -25,22 +27,31 @@ export default function ProductCard({ emoji, nombre, precio, image, handle, clas
     };
 
     const handleSelectFriend = (friendId) => {
-        // TODO: Implement gift sending logic
-        alert(`¡Regalo enviado a tu amigo! 🎁`);
+        const friend = friends.find(f => f.id === friendId);
+        addToCart({
+            handle,
+            title: nombre,
+            price: precio,
+            image
+        }, true); // Second param is isGift
+
+        // We can extend this later to store the specific friend if needed, 
+        // for now isGift: true handles the "Bolsas" categorization.
+        alert(`¡Añadido a tu Bolsa de regalos para ${friend?.name || 'tu amigo'}! 🎁`);
         setShowGiftModal(false);
     };
 
     return (
         <>
-            <Link to={`/product/${handle}`} className={`group cursor-pointer flex flex-col h-full bg-transparent ${className}`}>
+            <Link href={`/product/${handle}`} className={`group cursor-pointer flex flex-col h-full bg-transparent ${className}`}>
                 {/* Imagen del producto */}
                 <div className="aspect-square bg-transparent rounded-xl mb-4 flex items-center justify-center overflow-hidden relative">
                     {image ? (
-                        <img
+                        <Image
                             src={image}
                             alt={nombre}
-                            loading="lazy"
-                            decoding="async"
+                            fill
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />
                     ) : (

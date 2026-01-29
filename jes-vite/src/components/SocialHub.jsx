@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 
 export default function SocialHub() {
     const communities = [
@@ -20,7 +20,7 @@ export default function SocialHub() {
                     {communities.map((comm) => (
                         <Link
                             key={comm.name}
-                            to={comm.name === "Fondo Grupal" ? "/community" : "#"}
+                            href={comm.name === "Fondo Grupal" ? "/community" : "#"}
                             className="flex flex-col items-center text-center group cursor-pointer"
                         >
                             <div className="w-20 h-20 rounded-2xl bg-white/5 flex items-center justify-center text-4xl mb-6 group-hover:bg-orange-500 transition-colors duration-500 shadow-xl border border-white/10 group-hover:scale-110 transition-transform">
@@ -32,7 +32,7 @@ export default function SocialHub() {
                             </p>
                         </Link>
                     ))}
-                    <Link to="/community" className="flex flex-col items-center text-center group">
+                    <Link href="/community" className="flex flex-col items-center text-center group">
                         <div className="w-20 h-20 rounded-2xl bg-white/5 flex items-center justify-center text-4xl mb-6 group-hover:bg-green-500 transition-colors duration-500 shadow-xl border border-white/10">
                             🔍
                         </div>

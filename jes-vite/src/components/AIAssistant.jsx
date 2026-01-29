@@ -1,6 +1,8 @@
+'use client';
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useLocation } from 'react-router-dom';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { chatWithAI } from '../services/ai';
 import { getProducts } from '../services/shopify';
 
@@ -17,7 +19,7 @@ export default function AIAssistant({ isFullScreen = false }) {
     const [loading, setLoading] = useState(false);
     const [products, setProducts] = useState([]);
     const scrollRef = useRef(null);
-    const location = useLocation();
+    const pathname = usePathname();
 
     useEffect(() => {
         localStorage.setItem('jarvis-history', JSON.stringify(messages));
@@ -86,7 +88,7 @@ export default function AIAssistant({ isFullScreen = false }) {
                             return (
                                 <Link
                                     key={idx}
-                                    to={`/product/${handle}`}
+                                    href={`/product/${handle}`}
                                     className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-50 dark:bg-white text-zinc-900 dark:text-black rounded-full font-bold text-[10px] hover:scale-105 active:scale-95 transition-all shadow-xl border border-black/5"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10" /><path d="M7 17 17 7" /></svg>
@@ -190,7 +192,7 @@ export default function AIAssistant({ isFullScreen = false }) {
         </motion.div>
     );
 
-    if (location.pathname === '/jarvis' && !isFullScreen) return null;
+    if (pathname === '/ai' && !isFullScreen) return null;
     if (isFullScreen) return chatContent;
 
     return (

@@ -1,5 +1,6 @@
+'use client';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 
 export default function SportsZone() {
     return (
@@ -24,17 +25,17 @@ export default function SportsZone() {
                         </p>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <Link to="/sports" className="group p-6 bg-zinc-900 border border-white/5 rounded-[40px] hover:bg-emerald-500 transition-all duration-500">
+                            <Link href="/sports" className="group p-6 bg-zinc-900 border border-white/5 rounded-[40px] hover:bg-emerald-500 transition-all duration-500">
                                 <h3 className="text-white group-hover:text-black font-black text-2xl mb-2">F1 Store</h3>
                                 <p className="text-zinc-500 group-hover:text-black/60 text-xs font-bold uppercase tracking-widest">High Speed</p>
                             </Link>
-                            <Link to="/sports" className="group p-6 bg-zinc-900 border border-white/5 rounded-[40px] hover:bg-white transition-all duration-500">
+                            <Link href="/sports" className="group p-6 bg-zinc-900 border border-white/5 rounded-[40px] hover:bg-white transition-all duration-500">
                                 <h3 className="text-white group-hover:text-black font-black text-2xl mb-2">Soccer</h3>
                                 <p className="text-zinc-500 group-hover:text-black/60 text-xs font-bold uppercase tracking-widest">Street Gear</p>
                             </Link>
                         </div>
 
-                        <Link to="/sports" className="inline-flex items-center gap-4 text-white hover:text-emerald-500 transition-colors group">
+                        <Link href="/sports" className="inline-flex items-center gap-4 text-white hover:text-emerald-500 transition-colors group">
                             <span className="text-xs font-black uppercase tracking-[0.3em]">Explorar todo el departamento</span>
                             <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center group-hover:border-emerald-500 group-hover:translate-x-2 transition-all">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>

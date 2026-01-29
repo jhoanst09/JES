@@ -1,10 +1,11 @@
-import { useRef, useEffect, memo, useCallback } from 'react';
+'use client';
+import { useRef, useEffect, memo, useCallback, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { uploadToCloudinary } from '../services/cloudinary';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
 import { useWishlist } from '../context/WishlistContext';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
+import Image from 'next/image';
 
 // Memoized Post Component for performance
 const PostCard = memo(function PostCard({
@@ -22,15 +23,19 @@ const PostCard = memo(function PostCard({
         <div className="bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-[40px] overflow-hidden shadow-xl transition-transform duration-300">
             <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
-                    <Link to={`/wishlist?user=${post.userId || ''}`} className="flex gap-4 group/avatar">
-                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-transparent group-hover/avatar:border-blue-500 transition-all">
-                            <img
-                                src={post.avatar}
-                                className="w-full h-full object-cover"
-                                alt=""
-                                loading="lazy"
-                                decoding="async"
-                            />
+                    <Link href={post.userId ? `/wishlist?user=${post.userId}` : '#'} className="flex gap-4 group/avatar">
+                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-transparent group-hover/avatar:border-blue-500 transition-all relative bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xl">
+                            {post.avatar ? (
+                                <Image
+                                    src={post.avatar}
+                                    fill
+                                    sizes="48px"
+                                    className="object-cover"
+                                    alt=""
+                                />
+                            ) : (
+                                '👤'
+                            )}
                         </div>
                         <div>
                             <h4 className="font-black text-zinc-900 dark:text-white lowercase group-hover/avatar:text-blue-500 transition-colors">@{post.user}</h4>
@@ -45,13 +50,13 @@ const PostCard = memo(function PostCard({
                 </p>
 
                 {post.image && (
-                    <div className="rounded-[32px] overflow-hidden mb-4 border border-black/5 dark:border-white/5">
-                        <img
+                    <div className="rounded-[32px] overflow-hidden mb-4 border border-black/5 dark:border-white/5 relative aspect-video">
+                        <Image
                             src={post.image}
-                            className="w-full object-cover max-h-[400px]"
+                            fill
+                            sizes="(max-width: 768px) 100vw, 640px"
+                            className="object-cover"
                             alt=""
-                            loading="lazy"
-                            decoding="async"
                         />
                     </div>
                 )}
@@ -89,12 +94,13 @@ const PostCard = memo(function PostCard({
                         ) : comments[post.id]?.length > 0 ? (
                             comments[post.id].map(comment => (
                                 <div key={comment.id} className="flex gap-3">
-                                    <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
-                                        <img
+                                    <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 relative">
+                                        <Image
                                             src={comment.profiles?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'}
-                                            className="w-full h-full object-cover"
+                                            fill
+                                            sizes="32px"
+                                            className="object-cover"
                                             alt=""
-                                            loading="lazy"
                                         />
                                     </div>
                                     <div className="flex-1 bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-2xl border border-black/5 dark:border-white/5">
@@ -214,11 +220,11 @@ export default function SocialFeed({ profileUserId = null }) {
                 return {
                     id: p.id,
                     userId: p.user_id,
-                    user: profile?.name || 'Usuario',
-                    avatar: profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
+                    user: profile?.name || 'Comunidad JES',
+                    avatar: profile?.avatar_url || null, // No more generic unsplash clones
                     content: p.content,
                     image: p.media_url,
-                    time: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Ahora',
+                    time: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Reciente',
                     likes: p.likes_count || 0,
                     comments: p.comments_count || 0,
                     isLiked: userLikedPostIds.has(p.id)
@@ -465,14 +471,20 @@ export default function SocialFeed({ profileUserId = null }) {
                         <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter mb-4 italic">Únete a la Comunidad</h3>
                         <p className="text-blue-100 mb-6 font-medium text-sm md:text-base">Inicia sesión para compartir tus fotos, reseñas y vibras con la comunidad.</p>
-                        <Link to="/profile" className="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-black uppercase tracking-widest text-[10px] hover:scale-105 active:scale-95 transition-all shadow-xl">Iniciar Sesión</Link>
+                        <Link href="/profile" className="inline-block bg-white text-blue-600 px-10 py-4 rounded-full font-black uppercase tracking-widest text-[10px] hover:scale-105 active:scale-95 transition-all shadow-xl">Iniciar Sesión</Link>
                     </div>
                 ) : (
                     <div className="bg-white dark:bg-zinc-900 rounded-[32px] p-6 mb-8 border border-black/10 dark:border-white/10 shadow-xl">
                         <div className="flex gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xl shadow-inner border border-black/5 dark:border-white/5 shrink-0 overflow-hidden">
+                            <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xl shadow-inner border border-black/5 dark:border-white/5 shrink-0 overflow-hidden relative">
                                 {userProfile?.avatar_url ? (
-                                    <img src={userProfile.avatar_url} className="w-full h-full object-cover" />
+                                    <Image
+                                        src={userProfile.avatar_url}
+                                        fill
+                                        sizes="48px"
+                                        className="object-cover"
+                                        alt=""
+                                    />
                                 ) : (
                                     '👤'
                                 )}
