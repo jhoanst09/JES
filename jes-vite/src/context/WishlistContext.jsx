@@ -23,9 +23,19 @@ export function WishlistProvider({ children }) {
         let isMounted = true;
 
         const initAuth = async () => {
+            // Safety timeout - ensure loading never stays stuck
+            const loadingTimeout = setTimeout(() => {
+                if (isMounted) {
+                    console.warn('⚠️ Auth loading timeout - forcing completion');
+                    setLoading(false);
+                }
+            }, 5000);
+
             try {
                 const { data: { session: initialSession } } = await supabase.auth.getSession();
                 if (!isMounted) return;
+
+                console.log('🔐 Initial session:', initialSession ? 'found' : 'none');
 
                 setSession(initialSession);
                 setIsLoggedIn(!!initialSession);
@@ -36,6 +46,7 @@ export function WishlistProvider({ children }) {
             } catch (err) {
                 console.error('Error during initial auth check:', err);
             } finally {
+                clearTimeout(loadingTimeout);
                 if (isMounted) setLoading(false);
             }
         };
@@ -44,6 +55,8 @@ export function WishlistProvider({ children }) {
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
             if (!isMounted) return;
+
+            console.log('🔄 Auth state changed:', newSession ? 'logged in' : 'logged out');
 
             setSession(newSession);
             setIsLoggedIn(!!newSession);
