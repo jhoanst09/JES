@@ -11,6 +11,8 @@ import SocialFeed from '../src/components/SocialFeed';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+export const dynamic = 'force-dynamic';
+
 export default function Home() {
     const [feedType, setFeedType] = useState('for-you');
 

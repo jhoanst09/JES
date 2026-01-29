@@ -3,6 +3,9 @@ import AIAssistant from '@/src/components/AIAssistant';
 import Header from '@/src/components/Header';
 import MobileTabBar from '@/src/components/MobileTabBar';
 
+// Disable static generation for this page (uses external APIs)
+export const dynamic = 'force-dynamic';
+
 export default function AiPage() {
     return (
         <div className="h-screen flex flex-col">

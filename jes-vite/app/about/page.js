@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { createProductCheckout } from '@/src/services/shopify';
 
+export const dynamic = 'force-dynamic';
+
 export default function AboutPage() {
     const [showDonationModal, setShowDonationModal] = useState(false);
     const [isDonating, setIsDonating] = useState(false);
