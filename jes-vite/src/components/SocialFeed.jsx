@@ -142,7 +142,7 @@ const PostCard = memo(function PostCard({
 const MOCK_POSTS = [];
 
 export default function SocialFeed({ profileUserId = null }) {
-    const { isLoggedIn, session, userProfile } = useWishlist();
+    const { isLoggedIn, session, userProfile, loading: authLoading } = useWishlist();
     const [input, setInput] = useState('');
     const [selectedImage, setSelectedImage] = useState(null);
     const fileInputRef = useRef(null);
@@ -480,7 +480,12 @@ export default function SocialFeed({ profileUserId = null }) {
 
             {/* Create Post Header - Solo si es el feed general o mi propio perfil */}
             {(!profileUserId || (profileUserId === session?.user?.id)) && (
-                !isLoggedIn ? (
+                authLoading ? (
+                    <div className="bg-zinc-100 dark:bg-zinc-900 rounded-[32px] p-8 mb-8 text-center animate-pulse">
+                        <div className="h-6 w-48 mx-auto bg-zinc-300 dark:bg-zinc-700 rounded-lg mb-4" />
+                        <div className="h-4 w-64 mx-auto bg-zinc-200 dark:bg-zinc-800 rounded" />
+                    </div>
+                ) : !isLoggedIn ? (
                     <div className="bg-blue-600 rounded-[32px] p-8 mb-8 text-center shadow-2xl relative overflow-hidden group">
                         <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter mb-4 italic">Únete a la Comunidad</h3>

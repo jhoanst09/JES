@@ -14,19 +14,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 export const dynamic = 'force-dynamic';
 
 export default function Home() {
-    // Default to 'shop' so the store loads first
+    // Default to 'shop' so the store loads first - ignore saved preference
     const [feedType, setFeedType] = useState('shop');
 
+    // Clear any old saved preference to enforce 'shop' as default
     useEffect(() => {
-        const saved = localStorage.getItem('jes-feed-type');
-        if (saved) {
-            setFeedType(saved);
-        }
+        localStorage.removeItem('jes-feed-type');
     }, []);
 
     const handleFeedTypeChange = (type) => {
         setFeedType(type);
-        localStorage.setItem('jes-feed-type', type);
+        // Don't save preference - always start with 'shop'
     };
 
     return (
