@@ -183,17 +183,22 @@ export default function ChatPage() {
         e.preventDefault();
         if (!input.trim() || !activeChat || !session?.user?.id) return;
 
-        const text = input;
+        const text = input.trim();
         setInput('');
 
         let contentToSend = text;
         let isEncrypted = false;
 
+        // Try encryption but fall back to unencrypted if it fails
         if (encryptionEnabled && encryptionKeys[activeChat.id]) {
             try {
                 contentToSend = await encryptMessage(text, encryptionKeys[activeChat.id]);
                 isEncrypted = true;
-            } catch (err) { console.warn('Encryption failed:', err); }
+            } catch (err) {
+                console.warn('Encryption failed, sending unencrypted:', err);
+                contentToSend = text;
+                isEncrypted = false;
+            }
         }
 
         // Optimistic update
@@ -209,20 +214,35 @@ export default function ChatPage() {
             }]
         }));
 
-        const { error } = await supabase
-            .from('messages')
-            .insert({
-                sender_id: session.user.id,
-                receiver_id: activeChat.id,
-                content: contentToSend,
-                is_encrypted: isEncrypted
-            });
+        try {
+            const { error } = await supabase
+                .from('messages')
+                .insert({
+                    sender_id: session.user.id,
+                    receiver_id: activeChat.id,
+                    content: contentToSend,
+                    is_encrypted: isEncrypted
+                });
 
-        if (error) {
-            console.error('Send error:', error);
-            alert('Error al enviar. Intenta de nuevo.');
+            if (error) {
+                console.error('Send error:', error);
+                // Remove optimistic message on error
+                setMessages(prev => ({
+                    ...prev,
+                    [activeChat.id]: (prev[activeChat.id] || []).filter(m => m.id !== tempId)
+                }));
+                alert('Error al enviar mensaje. Verifica tu conexión.');
+            }
+        } catch (err) {
+            console.error('Network error:', err);
+            setMessages(prev => ({
+                ...prev,
+                [activeChat.id]: (prev[activeChat.id] || []).filter(m => m.id !== tempId)
+            }));
+            alert('Error de red. Intenta de nuevo.');
         }
     };
+
 
     if (!isLoggedIn) {
         return (
