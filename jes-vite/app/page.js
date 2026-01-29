@@ -14,11 +14,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 export const dynamic = 'force-dynamic';
 
 export default function Home() {
-    const [feedType, setFeedType] = useState('for-you');
+    // Default to 'shop' so the store loads first
+    const [feedType, setFeedType] = useState('shop');
 
     useEffect(() => {
         const saved = localStorage.getItem('jes-feed-type');
-        if (saved && saved !== 'shop') {
+        if (saved) {
             setFeedType(saved);
         }
     }, []);
