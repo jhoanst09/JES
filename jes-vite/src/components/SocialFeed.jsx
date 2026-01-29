@@ -318,15 +318,21 @@ export default function SocialFeed({ profileUserId = null }) {
     const handlePost = async () => {
         if ((!input.trim() && !selectedImage) || isPosting) return;
 
+        // Get user ID - try multiple sources
+        const userId = userProfile?.id || session?.user?.id;
+
+        console.log('🔍 Auth debug:', {
+            isLoggedIn,
+            userProfileId: userProfile?.id,
+            sessionUserId: session?.user?.id,
+            resolvedUserId: userId
+        });
+
         // Validar que el usuario está logueado
-        if (!isLoggedIn || !session?.user?.id) {
-            alert('Debes iniciar sesión para publicar.');
+        if (!userId) {
+            alert('Debes iniciar sesión para publicar. Por favor recarga la página.');
             return;
         }
-
-        console.log('📝 Starting post creation...');
-        console.log('User ID from session:', session.user.id);
-        console.log('User profile:', userProfile);
 
         setIsPosting(true);
 
@@ -345,7 +351,7 @@ export default function SocialFeed({ profileUserId = null }) {
             }
 
             const postData = {
-                user_id: session.user.id,
+                user_id: userId,
                 content: input.trim(),
                 media_url: imageUrl,
                 created_at: new Date().toISOString()
@@ -360,23 +366,18 @@ export default function SocialFeed({ profileUserId = null }) {
                 .single();
 
             if (error) {
-                console.error('❌ Supabase error details:', {
-                    message: error.message,
-                    code: error.code,
-                    details: error.details,
-                    hint: error.hint
-                });
+                console.error('❌ Supabase error:', error);
                 throw error;
             }
 
-            console.log('✅ Post creado en DB:', data);
+            console.log('✅ Post creado:', data);
 
-            // Add to local state immediately for instant feedback
+            // Add to local state immediately
             if (data) {
                 const newPost = {
                     id: data.id,
-                    userId: session.user.id,
-                    user: userProfile?.name || session.user.email?.split('@')[0] || 'Usuario',
+                    userId: userId,
+                    user: userProfile?.name || session?.user?.email?.split('@')[0] || 'Usuario',
                     avatar: userProfile?.avatar_url || null,
                     content: input.trim(),
                     image: imageUrl,
@@ -396,12 +397,12 @@ export default function SocialFeed({ profileUserId = null }) {
         } catch (error) {
             console.error('❌ Error posting:', error);
             const msg = error.message || 'Error desconocido';
-            const hint = error.hint ? `\nPista: ${error.hint}` : '';
-            alert(`Error al publicar: ${msg}${hint}`);
+            alert(`Error al publicar: ${msg}`);
         } finally {
             setIsPosting(false);
         }
     };
+
 
 
     const toggleLike = async (postId) => {
