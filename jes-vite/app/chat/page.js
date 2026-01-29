@@ -27,20 +27,9 @@ export default function ChatPage() {
     const [encryptionKeys, setEncryptionKeys] = useState({});
     const [encryptionEnabled, setEncryptionEnabled] = useState(true);
     const [loadingMessages, setLoadingMessages] = useState(false);
-    const [aiLoading, setAiLoading] = useState(false);
 
-    // JARVIS AI contact - always first in list
-    const jarvisContact = {
-        id: 'jarvis-ai',
-        name: 'JARVIS',
-        avatar: '🤖',
-        lastMsg: 'Tu asistente personal de JES',
-        type: 'ai',
-        online: true
-    };
-
-    // Map friends to chat format
-    const friendChats = friends.map(f => ({
+    // Map friends to chat format - REMOVED JARVIS AND FAKES
+    const chatList = friends.map(f => ({
         id: f.id,
         name: f.name || f.email?.split('@')[0] || 'Amigo',
         avatar: f.avatar_url,
@@ -49,48 +38,18 @@ export default function ChatPage() {
         online: onlineUsers.includes(f.id)
     }));
 
-    // Combine JARVIS + friends
-    const chatList = [jarvisContact, ...friendChats];
-
     const [filteredChats, setFilteredChats] = useState(chatList);
 
     useEffect(() => {
-        setFilteredChats([jarvisContact, ...friendChats]);
+        setFilteredChats(chatList);
     }, [friends, onlineUsers]);
 
-    // Supabase Realtime Presence for online status tracking
+    // Scroll to bottom on new messages
     useEffect(() => {
-        if (!session?.user?.id) return;
-
-        const presenceChannel = supabase.channel('online-users', {
-            config: { presence: { key: session.user.id } }
-        });
-
-        presenceChannel
-            .on('presence', { event: 'sync' }, () => {
-                const state = presenceChannel.presenceState();
-                const onlineIds = Object.keys(state);
-                setOnlineUsers(onlineIds);
-            })
-            .on('presence', { event: 'join' }, ({ key }) => {
-                setOnlineUsers(prev => [...prev, key]);
-            })
-            .on('presence', { event: 'leave' }, ({ key }) => {
-                setOnlineUsers(prev => prev.filter(id => id !== key));
-            })
-            .subscribe(async (status) => {
-                if (status === 'SUBSCRIBED') {
-                    await presenceChannel.track({
-                        user_id: session.user.id,
-                        online_at: new Date().toISOString()
-                    });
-                }
-            });
-
-        return () => {
-            supabase.removeChannel(presenceChannel);
-        };
-    }, [session?.user?.id]);
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [messages, activeChat]);
 
     useEffect(() => {
         async function loadTargetUser() {
@@ -222,70 +181,10 @@ export default function ChatPage() {
 
     const handleSend = async (e) => {
         e.preventDefault();
-        if (!input.trim() || !activeChat) return;
+        if (!input.trim() || !activeChat || !session?.user?.id) return;
 
         const text = input.trim();
         setInput('');
-
-        // Add user message to UI
-        const tempId = Date.now();
-        setMessages(prev => ({
-            ...prev,
-            [activeChat.id]: [...(prev[activeChat.id] || []), {
-                id: tempId,
-                sender: 'Yo',
-                text: text,
-                time: 'Ahora',
-                isEncrypted: false
-            }]
-        }));
-
-        // Handle JARVIS AI chat
-        if (activeChat.type === 'ai') {
-            setAiLoading(true);
-            try {
-                const products = await getProducts(30);
-                const chatHistory = (messages[activeChat.id] || []).map(m => ({
-                    role: m.sender === 'Yo' ? 'user' : 'assistant',
-                    content: m.text
-                }));
-                chatHistory.push({ role: 'user', content: text });
-
-                const response = await chatWithAI(chatHistory, products);
-
-                setMessages(prev => ({
-                    ...prev,
-                    [activeChat.id]: [...(prev[activeChat.id] || []), {
-                        id: Date.now(),
-                        sender: 'JARVIS',
-                        text: response,
-                        time: 'Ahora',
-                        isEncrypted: false
-                    }]
-                }));
-            } catch (err) {
-                console.error('AI Error:', err);
-                setMessages(prev => ({
-                    ...prev,
-                    [activeChat.id]: [...(prev[activeChat.id] || []), {
-                        id: Date.now(),
-                        sender: 'JARVIS',
-                        text: 'Error de conexión. Intenta de nuevo.',
-                        time: 'Ahora',
-                        isEncrypted: false
-                    }]
-                }));
-            } finally {
-                setAiLoading(false);
-            }
-            return;
-        }
-
-        // Regular user-to-user message
-        if (!session?.user?.id) {
-            alert('Debes iniciar sesión para enviar mensajes.');
-            return;
-        }
 
         let contentToSend = text;
         let isEncrypted = false;
@@ -297,8 +196,23 @@ export default function ChatPage() {
                 isEncrypted = true;
             } catch (err) {
                 console.warn('Encryption failed, sending unencrypted:', err);
+                contentToSend = text;
+                isEncrypted = false;
             }
         }
+
+        // Optimistic update
+        const tempId = Date.now();
+        setMessages(prev => ({
+            ...prev,
+            [activeChat.id]: [...(prev[activeChat.id] || []), {
+                id: tempId,
+                sender: 'Yo',
+                text: text,
+                time: 'Ahora',
+                isEncrypted
+            }]
+        }));
 
         try {
             const { error } = await supabase
@@ -312,6 +226,7 @@ export default function ChatPage() {
 
             if (error) {
                 console.error('Send error:', error);
+                // Remove optimistic message on error
                 setMessages(prev => ({
                     ...prev,
                     [activeChat.id]: (prev[activeChat.id] || []).filter(m => m.id !== tempId)
@@ -474,8 +389,6 @@ export default function ChatPage() {
                     </div>
                 </div>
             </main>
-
-            <MobileTabBar />
         </div>
     );
 }

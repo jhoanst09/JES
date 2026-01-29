@@ -316,13 +316,17 @@ export default function SocialFeed({ profileUserId = null }) {
     };
 
     const handlePost = async () => {
-        if (!input.trim() && !selectedImage || isPosting) return;
+        if ((!input.trim() && !selectedImage) || isPosting) return;
 
         // Validar que el usuario está logueado
-        if (!isLoggedIn || !session?.user) {
+        if (!isLoggedIn || !session?.user?.id) {
             alert('Debes iniciar sesión para publicar.');
             return;
         }
+
+        console.log('📝 Starting post creation...');
+        console.log('User ID from session:', session.user.id);
+        console.log('User profile:', userProfile);
 
         setIsPosting(true);
 
@@ -330,29 +334,38 @@ export default function SocialFeed({ profileUserId = null }) {
             let imageUrl = null;
             if (selectedImage) {
                 try {
+                    console.log('📷 Uploading image...');
                     const res = await uploadToCloudinary(selectedImage);
                     imageUrl = res.secure_url;
+                    console.log('✅ Image uploaded:', imageUrl);
                 } catch (uploadErr) {
                     console.error('Error uploading image:', uploadErr);
                     // Continue without image
                 }
             }
 
-            console.log('Posting with user_id:', userProfile.id);
+            const postData = {
+                user_id: session.user.id,
+                content: input.trim(),
+                media_url: imageUrl,
+                created_at: new Date().toISOString()
+            };
+
+            console.log('📤 Inserting post:', postData);
 
             const { data, error } = await supabase
                 .from('posts')
-                .insert({
-                    user_id: session.user.id,
-                    content: input,
-                    media_url: imageUrl,
-                    created_at: new Date().toISOString()
-                })
+                .insert(postData)
                 .select()
-                .single(); // Ensure we get the single object back
+                .single();
 
             if (error) {
-                console.error('❌ Supabase error:', error);
+                console.error('❌ Supabase error details:', {
+                    message: error.message,
+                    code: error.code,
+                    details: error.details,
+                    hint: error.hint
+                });
                 throw error;
             }
 
@@ -363,9 +376,9 @@ export default function SocialFeed({ profileUserId = null }) {
                 const newPost = {
                     id: data.id,
                     userId: session.user.id,
-                    user: userProfile.name || session.user.email?.split('@')[0] || 'Usuario',
-                    avatar: userProfile.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
-                    content: input,
+                    user: userProfile?.name || session.user.email?.split('@')[0] || 'Usuario',
+                    avatar: userProfile?.avatar_url || null,
+                    content: input.trim(),
                     image: imageUrl,
                     time: 'Ahora',
                     likes: 0,
@@ -382,13 +395,14 @@ export default function SocialFeed({ profileUserId = null }) {
             }
         } catch (error) {
             console.error('❌ Error posting:', error);
-            // Better error reporting
             const msg = error.message || 'Error desconocido';
-            alert(`Error al publicar: ${msg}\n\nDetalles en la consola.`);
+            const hint = error.hint ? `\nPista: ${error.hint}` : '';
+            alert(`Error al publicar: ${msg}${hint}`);
         } finally {
             setIsPosting(false);
         }
     };
+
 
     const toggleLike = async (postId) => {
         if (!isLoggedIn) {

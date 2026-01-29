@@ -192,8 +192,7 @@ export default function AIAssistant({ isFullScreen = false }) {
         </motion.div>
     );
 
-    // Hide on /ai page (fullscreen mode) and /chat page (JARVIS is a contact there)
-    if ((pathname === '/ai' || pathname === '/chat') && !isFullScreen) return null;
+    if (pathname === '/ai' && !isFullScreen) return null;
     if (isFullScreen) return chatContent;
 
     return (
