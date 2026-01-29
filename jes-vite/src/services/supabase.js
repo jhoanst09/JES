@@ -7,7 +7,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
     console.warn('Supabase credentials missing! Authentication and DB features will be disabled.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+        persistSession: true,
+        storageKey: 'jes-auth-token',
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+    }
+});
+
 
 /**
  * Upsert user profile data
