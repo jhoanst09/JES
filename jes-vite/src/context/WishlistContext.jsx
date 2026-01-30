@@ -107,7 +107,8 @@ export function WishlistProvider({ children }) {
         if (!user || isFetchingRef.current) return;
 
         isFetchingRef.current = true;
-        if (!isLoggedIn) setLoading(true);
+        // Solo mostrar loading si es la primera carga o no hay perfil
+        if (!userProfile?.id || !isLoggedIn) setLoading(true);
 
         try {
             // 1. Fetch Profile First

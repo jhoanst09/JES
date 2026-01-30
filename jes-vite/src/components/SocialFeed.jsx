@@ -544,7 +544,7 @@ export default function SocialFeed({ profileUserId = null }) {
 
             {/* Create Post Header - Solo si es el feed general o mi propio perfil */}
             {(!profileUserId || (profileUserId === session?.user?.id)) && (
-                authLoading ? (
+                (authLoading && !userProfile?.id) ? (
                     <div className="bg-zinc-100 dark:bg-zinc-900 rounded-[32px] p-8 mb-8 text-center animate-pulse">
                         <div className="h-6 w-48 mx-auto bg-zinc-300 dark:bg-zinc-700 rounded-lg mb-4" />
                         <div className="h-4 w-64 mx-auto bg-zinc-200 dark:bg-zinc-800 rounded" />

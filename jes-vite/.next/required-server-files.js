@@ -82,7 +82,7 @@ self.__SERVER_FILES_MANIFEST={
         },
         {
           "protocol": "https",
-          "hostname": "pbtvzhqvxzwjzvfuvuvr.supabase.co"
+          "hostname": "qyvxmmjmxwgjnxyvnqel.supabase.co"
         }
       ],
       "qualities": [

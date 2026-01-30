@@ -10,7 +10,7 @@ const nextConfig = {
             { protocol: 'https', hostname: 'images.unsplash.com' },
             { protocol: 'https', hostname: 'res.cloudinary.com' },
             { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
-            { protocol: 'https', hostname: 'pbtvzhqvxzwjzvfuvuvr.supabase.co' },
+            { protocol: 'https', hostname: 'qyvxmmjmxwgjnxyvnqel.supabase.co' },
         ],
     },
     // Disable static optimization globally for pages that fetch data
