@@ -2,10 +2,11 @@
 import { useRef, useEffect, memo, useCallback, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { uploadToCloudinary } from '../services/cloudinary';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useWishlist } from '../context/WishlistContext';
 import Link from 'next/link';
 import Image from 'next/image';
+import ProductPicker from './ProductPicker';
 
 // Memoized Post Component for performance
 const PostCard = memo(function PostCard({
@@ -56,14 +57,48 @@ const PostCard = memo(function PostCard({
                 </p>
 
                 {post.image && (
-                    <div className="rounded-[32px] overflow-hidden mb-4 border border-black/5 dark:border-white/5 relative aspect-video">
-                        <Image
-                            src={post.image}
-                            fill
-                            sizes="(max-width: 768px) 100vw, 640px"
-                            className="object-cover"
-                            alt=""
-                        />
+                    <div className="rounded-[32px] overflow-hidden mb-4 border border-black/5 dark:border-white/5 relative aspect-video bg-zinc-100 dark:bg-zinc-800">
+                        {post.mediaType === 'video' || post.image.includes('/video/upload/') ? (
+                            <video
+                                src={post.image.includes('cloudinary.com') ? post.image.replace('/upload/', '/upload/q_auto,f_auto/') : post.image}
+                                className="w-full h-full object-cover"
+                                controls
+                                muted
+                                playsInline
+                                onMouseEnter={(e) => e.target.play()}
+                                onMouseLeave={(e) => e.target.pause()}
+                            />
+                        ) : (
+                            <Image
+                                src={post.image.includes('cloudinary.com') && !post.image.includes('/q_auto,f_auto')
+                                    ? post.image.replace('/upload/', '/upload/q_auto,f_auto,w_800/')
+                                    : post.image}
+                                fill
+                                sizes="(max-width: 768px) 100vw, 640px"
+                                className="object-cover transition-opacity duration-300"
+                                alt=""
+                            />
+                        )}
+                    </div>
+                )}
+
+                {post.taggedProduct && (
+                    <div className="mt-4 p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-3xl border border-black/5 dark:border-white/5 flex gap-4 group/product">
+                        <div className="w-16 h-16 rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-black/5 dark:border-white/5 relative shrink-0">
+                            {post.taggedProduct.image && (
+                                <Image src={post.taggedProduct.image} fill sizes="64px" className="object-cover group-hover/product:scale-110 transition-transform duration-500" alt="" />
+                            )}
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                            <h5 className="font-black text-sm text-zinc-900 dark:text-white line-clamp-1 lowercase italic">@{post.taggedProduct.title}</h5>
+                            <p className="text-blue-600 font-black text-xs">{post.taggedProduct.price}</p>
+                        </div>
+                        <Link
+                            href={`/product/${post.taggedProduct.handle}`}
+                            className="self-center bg-blue-600 text-white px-5 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-blue-500/20"
+                        >
+                            Comprar
+                        </Link>
                     </div>
                 )}
 
@@ -151,13 +186,16 @@ export default function SocialFeed({ profileUserId = null }) {
     const { isLoggedIn, session, userProfile, loading: authLoading } = useWishlist();
     const [input, setInput] = useState('');
     const [selectedImage, setSelectedImage] = useState(null);
-    const fileInputRef = useRef(null);
+    const imageInputRef = useRef(null);
     const [posts, setPosts] = useState([]);
     const [isPosting, setIsPosting] = useState(false);
     const [commentingOn, setCommentingOn] = useState(null);
     const [commentInput, setCommentInput] = useState('');
     const [comments, setComments] = useState({}); // { postId: [comments] }
     const [loadingComments, setLoadingComments] = useState({});
+    const [showProductPicker, setShowProductPicker] = useState(false);
+    const [taggedProduct, setTaggedProduct] = useState(null);
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
 
     // Pagination states
     const [page, setPage] = useState(0);
@@ -236,10 +274,12 @@ export default function SocialFeed({ profileUserId = null }) {
                 avatar: profilesMap[p.user_id]?.avatar_url || null,
                 content: p.content,
                 image: p.media_url,
+                mediaType: p.media_type || (p.media_url?.includes('/video/upload/') ? 'video' : 'image'),
                 time: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Reciente',
                 likes: p.likes_count || 0,
                 comments: p.comments_count || 0,
-                isLiked: userLikedPostIds.has(p.id)
+                isLiked: userLikedPostIds.has(p.id),
+                taggedProduct: p.tagged_product // { id, handle, title, image, price }
             }));
 
             if (isInitial) {
@@ -255,6 +295,7 @@ export default function SocialFeed({ profileUserId = null }) {
             console.error('❌ Error fetching posts:', err);
         } finally {
             setIsFetchingMore(false);
+            setIsInitialLoading(false);
         }
     };
 
@@ -371,10 +412,14 @@ export default function SocialFeed({ profileUserId = null }) {
         }
     }, [commentingOn]);
 
-    const handleImageSelect = (e) => {
+    const [selectedMediaType, setSelectedMediaType] = useState('image');
+
+    const handleFileSelect = (e, type) => {
         const file = e.target.files[0];
         if (file) {
+            console.log(`📁 File selected: ${file.name} (${type})`);
             setSelectedImage(file);
+            setSelectedMediaType(type);
         }
     };
 
@@ -401,15 +446,17 @@ export default function SocialFeed({ profileUserId = null }) {
 
         try {
             let imageUrl = null;
+            let mediaType = 'image';
+
             if (selectedImage) {
                 try {
-                    console.log('📷 Uploading image...');
+                    console.log(`📤 Uploading ${selectedMediaType}...`);
                     const res = await uploadToCloudinary(selectedImage);
                     imageUrl = res.secure_url;
-                    console.log('✅ Image uploaded:', imageUrl);
+                    mediaType = res.resource_type || selectedMediaType;
+                    console.log('✅ Media uploaded:', imageUrl, mediaType);
                 } catch (uploadErr) {
-                    console.error('Error uploading image:', uploadErr);
-                    // Continue without image
+                    console.error('Error uploading media:', uploadErr);
                 }
             }
 
@@ -417,6 +464,8 @@ export default function SocialFeed({ profileUserId = null }) {
                 user_id: userId,
                 content: input.trim(),
                 media_url: imageUrl,
+                media_type: mediaType,
+                tagged_product: taggedProduct,
                 created_at: new Date().toISOString()
             };
 
@@ -444,6 +493,8 @@ export default function SocialFeed({ profileUserId = null }) {
                     avatar: userProfile?.avatar_url || null,
                     content: input.trim(),
                     image: imageUrl,
+                    mediaType: mediaType,
+                    taggedProduct: taggedProduct,
                     time: 'Ahora',
                     likes: 0,
                     comments: 0,
@@ -454,9 +505,9 @@ export default function SocialFeed({ profileUserId = null }) {
 
             setInput('');
             setSelectedImage(null);
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
+            setTaggedProduct(null);
+            if (imageInputRef.current) imageInputRef.current.value = '';
+            if (videoInputRef.current) videoInputRef.current.value = '';
         } catch (error) {
             console.error('❌ Error posting:', error);
             const msg = error.message || 'Error desconocido';
@@ -562,9 +613,14 @@ export default function SocialFeed({ profileUserId = null }) {
             {/* Create Post Header - Solo si es el feed general o mi propio perfil */}
             {(!profileUserId || (profileUserId === session?.user?.id)) && (
                 (authLoading && !userProfile?.id) ? (
-                    <div className="bg-zinc-100 dark:bg-zinc-900 rounded-[32px] p-8 mb-8 text-center animate-pulse">
-                        <div className="h-6 w-48 mx-auto bg-zinc-300 dark:bg-zinc-700 rounded-lg mb-4" />
-                        <div className="h-4 w-64 mx-auto bg-zinc-200 dark:bg-zinc-800 rounded" />
+                    <div className="bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-[40px] p-6 mb-8 animate-pulse">
+                        <div className="flex gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-zinc-200 dark:bg-zinc-800 shrink-0" />
+                            <div className="flex-1 space-y-3 pt-2">
+                                <div className="h-4 w-3/4 bg-zinc-100 dark:bg-zinc-800 rounded" />
+                                <div className="h-4 w-1/2 bg-zinc-50 dark:bg-zinc-800/50 rounded" />
+                            </div>
+                        </div>
                     </div>
                 ) : !isLoggedIn ? (
                     <div className="bg-blue-600 rounded-[32px] p-8 mb-8 text-center shadow-2xl relative overflow-hidden group">
@@ -591,19 +647,29 @@ export default function SocialFeed({ profileUserId = null }) {
                             </div>
                             <div className="flex-1">
                                 <textarea
-                                    placeholder="¿Qué quieres compartir con la comunidad?"
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
-                                    className="w-full bg-transparent border-none outline-none text-zinc-900 dark:text-white resize-none text-lg placeholder:text-zinc-500 dark:placeholder:text-zinc-700"
-                                    rows="2"
+                                    placeholder="¿Qué quieres compartir con la comunidad?"
+                                    className="w-full bg-transparent border-none focus:ring-0 text-xl font-medium placeholder:text-zinc-400 dark:placeholder:text-zinc-500 min-h-[120px] resize-none pb-12"
                                 />
 
                                 {selectedImage && (
-                                    <div className="mt-4 relative group">
-                                        <img src={URL.createObjectURL(selectedImage)} className="w-24 h-24 object-cover rounded-2xl border-2 border-blue-500 shadow-lg" alt="" />
+                                    <div className="mt-4 relative group w-fit">
+                                        {selectedMediaType === 'video' ? (
+                                            <video
+                                                src={URL.createObjectURL(selectedImage)}
+                                                className="w-48 h-32 object-cover rounded-2xl border-2 border-blue-500 shadow-lg"
+                                            />
+                                        ) : (
+                                            <img
+                                                src={URL.createObjectURL(selectedImage)}
+                                                className="w-24 h-24 object-cover rounded-2xl border-2 border-blue-500 shadow-lg"
+                                                alt=""
+                                            />
+                                        )}
                                         <button
                                             onClick={() => setSelectedImage(null)}
-                                            className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs shadow-lg hover:scale-110 transition-transform"
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs shadow-lg hover:scale-110 transition-transform z-10"
                                         >
                                             ✕
                                         </button>
@@ -615,20 +681,42 @@ export default function SocialFeed({ profileUserId = null }) {
                                         <input
                                             type="file"
                                             className="hidden"
-                                            ref={fileInputRef}
+                                            ref={imageInputRef}
                                             accept="image/*"
-                                            onChange={handleImageSelect}
+                                            onChange={(e) => handleFileSelect(e, 'image')}
                                         />
                                         <button
-                                            onClick={() => fileInputRef.current?.click()}
-                                            className="text-zinc-600 dark:text-zinc-400 hover:text-blue-500 transition-colors text-xl"
+                                            type="button"
+                                            onClick={(e) => {
+                                                console.log('🖼️ Image button clicked');
+                                                e.stopPropagation();
+                                                imageInputRef.current?.click();
+                                            }}
+                                            className={`text-2xl transition-all cursor-pointer hover:scale-110 active:scale-90 ${selectedMediaType === 'image' && selectedImage ? 'grayscale-0' : 'grayscale hover:grayscale-0 opacity-70 hover:opacity-100'}`}
                                             title="Subir Imagen"
                                         >
                                             🖼️
                                         </button>
-                                        <button className="text-zinc-600 dark:text-zinc-400 hover:text-blue-500 transition-colors text-xl">📹</button>
-                                        <button className="text-zinc-600 dark:text-zinc-400 hover:text-blue-500 transition-colors text-xl">🛒</button>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setShowProductPicker(prev => !prev);
+                                            }}
+                                            className={`text-2xl transition-all cursor-pointer hover:scale-110 active:scale-90 ${taggedProduct ? 'grayscale-0 scale-110' : 'grayscale hover:grayscale-0 opacity-70 hover:opacity-100'}`}
+                                            title="Etiquetar Producto"
+                                        >
+                                            🛒
+                                        </button>
                                     </div>
+
+                                    {taggedProduct && (
+                                        <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-full border border-blue-100 dark:border-blue-900/30">
+                                            <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase italic">🏷️ {taggedProduct.title}</span>
+                                            <button onClick={() => setTaggedProduct(null)} className="text-blue-400 hover:text-blue-600 transition-colors">✕</button>
+                                        </div>
+                                    )}
                                     <button
                                         onClick={handlePost}
                                         disabled={(!input.trim() && !selectedImage) || isPosting}
@@ -645,7 +733,21 @@ export default function SocialFeed({ profileUserId = null }) {
 
             {/* Posts Grid - Optimized with memoized components */}
             <div className="space-y-6">
-                {posts.length > 0 ? (
+                {isInitialLoading ? (
+                    [1, 2, 3].map(i => (
+                        <div key={i} className="bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-[40px] p-6 animate-pulse">
+                            <div className="flex gap-4 mb-4">
+                                <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800" />
+                                <div className="flex-1 space-y-2 py-2">
+                                    <div className="h-3 w-32 bg-zinc-100 dark:bg-zinc-800 rounded" />
+                                    <div className="h-2 w-20 bg-zinc-50 dark:bg-zinc-800/50 rounded" />
+                                </div>
+                            </div>
+                            <div className="h-20 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl mb-4" />
+                            <div className="h-1 w-full bg-zinc-100 dark:bg-zinc-800 rounded mt-4" />
+                        </div>
+                    ))
+                ) : posts.length > 0 ? (
                     <>
                         {posts.map((post) => (
                             <PostCard
@@ -663,17 +765,15 @@ export default function SocialFeed({ profileUserId = null }) {
                             />
                         ))}
 
-                        {/* Elemento para detectar scroll infinito */}
-                        <div ref={loaderRef} className="py-12 flex flex-col items-center gap-4">
+                        {/* End of Feed Loader */}
+                        <div ref={loaderRef} className="py-20 flex flex-col items-center justify-center opacity-40">
                             {hasMore ? (
                                 <>
-                                    <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 animate-pulse">Cargando más vibras...</p>
+                                    <div className="w-8 h-8 rounded-full border-4 border-blue-600 border-t-transparent animate-spin mb-4" />
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 italic">Sincronizando feed...</p>
                                 </>
                             ) : (
-                                <div className="h-px w-full bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-800 to-transparent my-8 relative">
-                                    <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-black px-4 text-[10px] font-black uppercase tracking-[0.4em] text-zinc-400">Fin de la comunidad</span>
-                                </div>
+                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500 italic">Llegaste al origen del universo ✨</p>
                             )}
                         </div>
                     </>
@@ -686,6 +786,16 @@ export default function SocialFeed({ profileUserId = null }) {
                 )}
             </div>
 
+            {/* Product Picker Modal */}
+            {showProductPicker && (
+                <ProductPicker
+                    onSelect={(p) => {
+                        setTaggedProduct(p);
+                        setShowProductPicker(false);
+                    }}
+                    onClose={() => setShowProductPicker(false)}
+                />
+            )}
         </div>
     );
 }

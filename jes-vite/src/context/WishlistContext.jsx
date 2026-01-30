@@ -23,16 +23,21 @@ export function WishlistProvider({ children }) {
         let isMounted = true;
 
         const initAuth = async () => {
-            // Safety timeout - ensure loading never stays stuck
+            // Safety timeout - increased to 15s for stability
             const loadingTimeout = setTimeout(() => {
                 if (isMounted) {
-                    console.warn('⚠️ Auth loading timeout - forcing completion');
+                    console.warn('⚠️ Auth loading timeout - forcing completion after 15s');
                     setLoading(false);
                 }
-            }, 5000);
+            }, 15000);
 
             try {
-                const { data: { session: initialSession } } = await supabase.auth.getSession();
+                // UX: Track last visit
+                localStorage.setItem('jes_last_visit', new Date().toISOString());
+
+                const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
+
+                if (sessionError) throw sessionError;
                 if (!isMounted) return;
 
                 console.log('🔐 Initial session:', initialSession ? 'found' : 'none');

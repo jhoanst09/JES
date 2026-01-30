@@ -13,16 +13,29 @@ const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || proces
  */
 export const getCloudinaryUrl = (publicId, options = {}) => {
     if (!publicId) return '';
-    if (publicId.startsWith('http')) return publicId; // Fallback if already a URL
+    if (publicId.startsWith('http')) {
+        // Si ya es una URL de Cloudinary, le inyectamos las transformaciones si no las tiene
+        if (publicId.includes('cloudinary.com') && !publicId.includes('/q_auto,f_auto')) {
+            return publicId.replace('/upload/', '/upload/q_auto,f_auto/');
+        }
+        return publicId;
+    }
 
-    const { width, height, crop = 'fill', quality = 'auto', format = 'auto' } = options;
+    const {
+        width,
+        height,
+        crop = 'fill',
+        quality = 'auto',
+        format = 'auto',
+        resourceType = 'image' // 'image' or 'video'
+    } = options;
 
     let transformations = `q_${quality},f_${format}`;
     if (width) transformations += `,w_${width}`;
     if (height) transformations += `,h_${height}`;
     if (crop) transformations += `,c_${crop}`;
 
-    return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${transformations}/${publicId}`;
+    return `https://res.cloudinary.com/${CLOUD_NAME}/${resourceType}/upload/${transformations}/${publicId}`;
 };
 
 /**

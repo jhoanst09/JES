@@ -29,7 +29,7 @@ async function shopifyFetch({ query, variables }) {
 
     return await response.json();
   } catch (error) {
-    console.error('Error fetching from Shopify:', error);
+    console.error('❌ Error fetching from Shopify:', error);
     return null;
   }
 }
@@ -68,8 +68,14 @@ export async function getProducts(limit = 50) {
 
   const response = await shopifyFetch({ query: productsQuery, variables: { first: limit } });
 
-  if (!response || !response.data) return [];
+  console.log('🔍 Shopify full response:', JSON.stringify(response, null, 2));
 
+  if (!response || !response.data) {
+    console.error('❌ Shopify response empty or invalid:', response);
+    return [];
+  }
+
+  console.log('✅ Fetched products edges:', response.data.products.edges.length);
   return response.data.products.edges.map(({ node }) => ({
     id: node.id,
     title: node.title,

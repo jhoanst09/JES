@@ -28,10 +28,15 @@ export default function Footer() {
                 <div className="space-y-6">
                     <h4 className="text-white font-black text-xs uppercase tracking-[0.3em]">Explorar</h4>
                     <ul className="space-y-3">
-                        {['Dispositivos', 'Ropa', 'Música', 'Streaming'].map(item => (
-                            <li key={item}>
-                                <Link href={`/${item.toLowerCase().replace('ú', 'u')}`} className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">
-                                    {item}
+                        {[
+                            { name: 'Dispositivos', href: '/electronics' },
+                            { name: 'Ropa', href: '/apparel' },
+                            { name: 'Música', href: '/music' },
+                            { name: 'Streaming', href: '/streaming' }
+                        ].map(item => (
+                            <li key={item.name}>
+                                <Link href={item.href} className="text-zinc-500 hover:text-white text-sm font-bold transition-colors">
+                                    {item.name}
                                 </Link>
                             </li>
                         ))}

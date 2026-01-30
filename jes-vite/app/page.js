@@ -27,6 +27,8 @@ export default function Home() {
         // Don't save preference - always start with 'shop'
     };
 
+    console.log('🚀 Home Page Rendering - FeedType:', feedType);
+
     return (
         <div className="min-h-screen overflow-x-hidden selection:bg-blue-500/30 bg-white dark:bg-black transition-colors duration-500">
             <Header />
