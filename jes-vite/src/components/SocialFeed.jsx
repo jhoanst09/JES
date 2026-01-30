@@ -469,26 +469,30 @@ export default function SocialFeed({ profileUserId = null }) {
 
 
     const toggleLike = async (postId) => {
-        if (!isLoggedIn) {
+        const userId = userProfile?.id || session?.user?.id;
+
+        if (!isLoggedIn || !userId) {
             alert('¡Oye! Inicia sesión para dar like.');
             return;
         }
 
         const post = posts.find(p => p.id === postId);
+        if (!post) return;
+
         const isLiked = post.isLiked;
 
         // Optimistic UI
         setPosts(prev => prev.map(p =>
-            p.id === postId ? { ...p, likes: isLiked ? p.likes - 1 : p.likes + 1, isLiked: !isLiked } : p
+            p.id === postId ? { ...p, likes: isLiked ? Math.max(0, p.likes - 1) : p.likes + 1, isLiked: !isLiked } : p
         ));
 
         try {
-            console.log(`👍 Toggling like for post ${postId}...`);
+            console.log(`👍 Toggling like for post ${postId} (user: ${userId})...`);
             if (isLiked) {
-                const { error } = await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', session.user.id);
+                const { error } = await supabase.from('post_likes').delete().eq('post_id', postId).eq('user_id', userId);
                 if (error) throw error;
             } else {
-                const { error } = await supabase.from('post_likes').insert({ post_id: postId, user_id: session.user.id });
+                const { error } = await supabase.from('post_likes').insert({ post_id: postId, user_id: userId });
                 if (error) throw error;
             }
             console.log('✅ Like toggled successfully');
@@ -496,17 +500,24 @@ export default function SocialFeed({ profileUserId = null }) {
             console.error('❌ Error toggling like:', error);
             // Revert optimistic UI on error
             setPosts(prev => prev.map(p =>
-                p.id === postId ? { ...p, likes: isLiked ? p.likes + 1 : p.likes - 1, isLiked: isLiked } : p
+                p.id === postId ? { ...p, likes: isLiked ? p.likes : Math.max(0, p.likes - 1), isLiked: isLiked } : p
             ));
         }
     };
 
     const handleComment = async (postId) => {
-        if (!commentInput.trim() || !isLoggedIn) return;
+        const userId = userProfile?.id || session?.user?.id;
 
-        const content = commentInput;
+        if (!commentInput.trim() || !isLoggedIn || !userId) {
+            if (!userId && isLoggedIn) {
+                alert('Tuvimos un problema con tu sesión. Por favor recarga la página.');
+            }
+            return;
+        }
+
+        const content = commentInput.trim();
         setCommentInput('');
-        setCommentingOn(null);
+        // No cerrar la pestaña de comentarios para que vea el optimista
 
         // Optimistic UI
         setPosts(prev => prev.map(p =>
@@ -514,20 +525,26 @@ export default function SocialFeed({ profileUserId = null }) {
         ));
 
         try {
+            console.log(`💬 Posting comment on ${postId} (user: ${userId})...`);
             const { error } = await supabase
                 .from('post_comments')
                 .insert({
                     post_id: postId,
-                    user_id: session.user.id,
+                    user_id: userId,
                     content: content
                 });
             if (error) throw error;
 
+            console.log('✅ Comment posted successfully');
             // Refrescar comentarios inmediatamente
             fetchComments(postId);
         } catch (error) {
-            console.error('Error commenting:', error);
-            alert('No pudimos enviar tu comentario.');
+            console.error('❌ Error commenting:', error);
+            // Revert optimistic UI
+            setPosts(prev => prev.map(p =>
+                p.id === postId ? { ...p, comments: Math.max(0, (p.comments || 1) - 1) } : p
+            ));
+            alert('No pudimos enviar tu comentario. ' + (error.message || ''));
         }
     };
 
