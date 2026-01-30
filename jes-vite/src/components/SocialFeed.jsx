@@ -16,9 +16,15 @@ const PostCard = memo(function PostCard({
     commentInput,
     setCommentInput,
     handleComment,
-    comments,
-    loadingComments
+    postComments = [],
+    isLoadingComments = false,
+    fetchComments
 }) {
+    useEffect(() => {
+        if (commentingOn === post.id && postComments.length === 0 && !isLoadingComments) {
+            fetchComments(post.id);
+        }
+    }, [commentingOn, post.id, postComments.length, isLoadingComments, fetchComments]);
     return (
         <div className="bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-[40px] overflow-hidden shadow-xl transition-transform duration-300">
             <div className="p-6">
@@ -89,10 +95,10 @@ const PostCard = memo(function PostCard({
                 <div className={`overflow-hidden transition-all duration-300 ease-out border-t border-black/5 dark:border-white/5 mt-4 ${commentingOn === post.id ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 border-t-0'
                     }`}>
                     <div className="py-4 space-y-4">
-                        {loadingComments[post.id] ? (
+                        {isLoadingComments ? (
                             <p className="text-center text-[10px] text-zinc-500 font-bold uppercase tracking-widest animate-pulse">Cargando comentarios...</p>
-                        ) : comments[post.id]?.length > 0 ? (
-                            comments[post.id].map(comment => (
+                        ) : postComments.length > 0 ? (
+                            postComments.map(comment => (
                                 <div key={comment.id} className="flex gap-3">
                                     <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 relative">
                                         <Image
@@ -634,8 +640,8 @@ export default function SocialFeed({ profileUserId = null }) {
                                 commentInput={commentInput}
                                 setCommentInput={setCommentInput}
                                 handleComment={handleComment}
-                                comments={comments[post.id] || []}
-                                isLoadingComments={loadingComments[post.id]}
+                                postComments={comments[post.id] || []}
+                                isLoadingComments={loadingComments[post.id] || false}
                                 fetchComments={fetchComments}
                             />
                         ))}
