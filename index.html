@@ -11,6 +11,11 @@
 <body>
     <!-- Root para React -->
     <div id="root"></div>
+    <div style="position: fixed; top: 10px; right: 10px; font-size: 50px; z-index: 9999;" class="animate-rocket">🚀</div>
+    <style>
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+        .animate-rocket { animation: bounce 1s infinite; }
+    </style>
 
     <!-- Anime.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
