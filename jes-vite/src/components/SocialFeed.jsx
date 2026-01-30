@@ -153,102 +153,159 @@ export default function SocialFeed({ profileUserId = null }) {
     const [comments, setComments] = useState({}); // { postId: [comments] }
     const [loadingComments, setLoadingComments] = useState({});
 
-    useEffect(() => {
-        const fetchPosts = async () => {
-            console.log('🔄 Fetching posts...');
+    // Pagination states
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [isFetchingMore, setIsFetchingMore] = useState(false);
+    const pageSize = 10;
+    const loaderRef = useRef(null);
 
-            // Fetch posts without join first (more reliable)
+    const fetchPosts = async (isInitial = true) => {
+        if (isInitial) {
+            setPage(0);
+            setHasMore(true);
+        } else {
+            if (!hasMore || isFetchingMore) return;
+            setIsFetchingMore(true);
+        }
+
+        const currentPage = isInitial ? 0 : page;
+        const start = currentPage * pageSize;
+        const end = start + pageSize - 1;
+
+        console.log(`🔄 Fetching posts (page ${currentPage}, range ${start}-${end})...`);
+
+        try {
             let query = supabase
                 .from('posts')
-                .select('*')
-                .order('created_at', { ascending: false });
+                .select('*', { count: 'exact' })
+                .order('created_at', { ascending: false })
+                .range(start, end);
 
             if (profileUserId) {
                 query = query.eq('user_id', profileUserId);
             }
 
-            const { data: postsData, error: postsError } = await query;
+            const { data: postsData, error: postsError, count } = await query;
 
-            if (postsError) {
-                console.error('❌ Error fetching posts:', postsError);
-                if (postsError.code === '42P01') {
-                    alert('⚠️ Error crítico: La tabla de posts no existe en la base de datos de Supabase. Debes ejecutar el script SQL.');
-                }
-                setPosts([]);
-                return;
-            }
-
-            console.log('✅ Posts fetched:', postsData?.length || 0);
+            if (postsError) throw postsError;
 
             if (!postsData || postsData.length === 0) {
-                console.log('📭 No hay publicaciones en la base de datos.');
-                setPosts([]); // Show empty state instead of mocks when database is truly empty
+                setHasMore(false);
+                if (isInitial) setPosts([]);
                 return;
             }
 
-            // Fetch user likes if logged in
-            let userLikedPostIds = new Set();
-            if (isLoggedIn && userProfile?.id) {
-                const { data: likesData } = await supabase
-                    .from('post_likes')
-                    .select('post_id')
-                    .eq('user_id', userProfile.id);
-
-                if (likesData) {
-                    userLikedPostIds = new Set(likesData.map(l => l.post_id));
-                }
-            }
-
-            // Fetch profiles separately for each post
+            // Fetch profiles for these posts
             const userIds = [...new Set(postsData.map(p => p.user_id).filter(Boolean))];
             let profilesMap = {};
-
             if (userIds.length > 0) {
                 const { data: profilesData } = await supabase
                     .from('profiles')
                     .select('id, name, avatar_url')
                     .in('id', userIds);
-
                 if (profilesData) {
                     profilesMap = Object.fromEntries(profilesData.map(p => [p.id, p]));
                 }
             }
 
-            // Format posts with profile info
-            const formatted = postsData.map(p => {
-                const profile = profilesMap[p.user_id];
-                return {
-                    id: p.id,
-                    userId: p.user_id,
-                    user: profile?.name || 'Comunidad JES',
-                    avatar: profile?.avatar_url || null, // No more generic unsplash clones
-                    content: p.content,
-                    image: p.media_url,
-                    time: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Reciente',
-                    likes: p.likes_count || 0,
-                    comments: p.comments_count || 0,
-                    isLiked: userLikedPostIds.has(p.id)
-                };
-            });
+            // Fetch likes for these posts if logged in
+            let userLikedPostIds = new Set();
+            if (isLoggedIn && (userProfile?.id || session?.user?.id)) {
+                const currentId = userProfile?.id || session?.user?.id;
+                const { data: likesData } = await supabase
+                    .from('post_likes')
+                    .select('post_id')
+                    .eq('user_id', currentId)
+                    .in('post_id', postsData.map(p => p.id));
+                if (likesData) {
+                    userLikedPostIds = new Set(likesData.map(l => l.post_id));
+                }
+            }
 
-            setPosts(formatted);
-        };
+            const formatted = postsData.map(p => ({
+                id: p.id,
+                userId: p.user_id,
+                user: profilesMap[p.user_id]?.name || 'Comunidad JES',
+                avatar: profilesMap[p.user_id]?.avatar_url || null,
+                content: p.content,
+                image: p.media_url,
+                time: p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Reciente',
+                likes: p.likes_count || 0,
+                comments: p.comments_count || 0,
+                isLiked: userLikedPostIds.has(p.id)
+            }));
 
-        fetchPosts();
+            if (isInitial) {
+                setPosts(formatted);
+            } else {
+                setPosts(prev => [...prev, ...formatted]);
+            }
 
-        // Subscribe to real-time changes
+            setHasMore(postsData.length === pageSize);
+            if (!isInitial) setPage(prev => prev + 1);
+
+        } catch (err) {
+            console.error('❌ Error fetching posts:', err);
+        } finally {
+            setIsFetchingMore(false);
+        }
+    };
+
+    // Initial load and scroll observer
+    useEffect(() => {
+        fetchPosts(true);
+
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && hasMore && !isFetchingMore) {
+                fetchPosts(false);
+            }
+        }, { threshold: 1.0 });
+
+        if (loaderRef.current) observer.observe(loaderRef.current);
+
+        // Smarter Real-time: Just fetch the single newest post when inserted
         const channel = supabase
             .channel(`public:posts:${profileUserId || 'all'}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
-                console.log('Real-time post update!');
-                fetchPosts();
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
+                console.log('✨ New post received!');
+                const newPost = payload.new;
+
+                // Fetch profile for the new post
+                const { data: pData } = await supabase
+                    .from('profiles')
+                    .select('name, avatar_url')
+                    .eq('id', newPost.user_id)
+                    .single();
+
+                setPosts(prev => {
+                    // Evitar duplicados si el usuario es el autor y ya se agregó de forma optimista
+                    if (prev.some(p => p.id === newPost.id)) return prev;
+
+                    return [{
+                        id: newPost.id,
+                        userId: newPost.user_id,
+                        user: pData?.name || 'Comunidad JES',
+                        avatar: pData?.avatar_url || null,
+                        content: newPost.content,
+                        image: newPost.media_url,
+                        time: 'Ahora',
+                        likes: 0,
+                        comments: 0,
+                        isLiked: false
+                    }, ...prev];
+                });
+            })
+            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'posts' }, (payload) => {
+                setPosts(prev => prev.filter(p => p.id !== payload.old.id));
             })
             .subscribe();
 
         return () => {
+            observer.disconnect();
             supabase.removeChannel(channel);
         };
-    }, [profileUserId, isLoggedIn]);
+    }, [isLoggedIn, profileUserId]);
 
     const fetchComments = async (postId) => {
         if (loadingComments[postId]) return;
@@ -566,20 +623,37 @@ export default function SocialFeed({ profileUserId = null }) {
             {/* Posts Grid - Optimized with memoized components */}
             <div className="space-y-6">
                 {posts.length > 0 ? (
-                    posts.map((post) => (
-                        <PostCard
-                            key={post.id}
-                            post={post}
-                            toggleLike={toggleLike}
-                            commentingOn={commentingOn}
-                            setCommentingOn={setCommentingOn}
-                            commentInput={commentInput}
-                            setCommentInput={setCommentInput}
-                            handleComment={handleComment}
-                            comments={comments}
-                            loadingComments={loadingComments}
-                        />
-                    ))
+                    <>
+                        {posts.map((post) => (
+                            <PostCard
+                                key={post.id}
+                                post={post}
+                                toggleLike={toggleLike}
+                                commentingOn={commentingOn}
+                                setCommentingOn={setCommentingOn}
+                                commentInput={commentInput}
+                                setCommentInput={setCommentInput}
+                                handleComment={handleComment}
+                                comments={comments[post.id] || []}
+                                isLoadingComments={loadingComments[post.id]}
+                                fetchComments={fetchComments}
+                            />
+                        ))}
+
+                        {/* Elemento para detectar scroll infinito */}
+                        <div ref={loaderRef} className="py-12 flex flex-col items-center gap-4">
+                            {hasMore ? (
+                                <>
+                                    <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 animate-pulse">Cargando más vibras...</p>
+                                </>
+                            ) : (
+                                <div className="h-px w-full bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-800 to-transparent my-8 relative">
+                                    <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-black px-4 text-[10px] font-black uppercase tracking-[0.4em] text-zinc-400">Fin de la comunidad</span>
+                                </div>
+                            )}
+                        </div>
+                    </>
                 ) : (
                     <div className="py-20 text-center space-y-4 bg-zinc-50 dark:bg-zinc-900/30 rounded-[40px] border border-dashed border-black/5 dark:border-white/10">
                         <span className="text-5xl block mb-2 opacity-20">✨</span>
@@ -588,6 +662,7 @@ export default function SocialFeed({ profileUserId = null }) {
                     </div>
                 )}
             </div>
+
         </div>
     );
 }
