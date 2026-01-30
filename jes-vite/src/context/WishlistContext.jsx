@@ -122,6 +122,7 @@ export function WishlistProvider({ children }) {
             if (pData) {
                 setUserProfile({
                     ...pData,
+                    id: pData.id, // Explicitly ensure ID is here
                     avatar: pData.avatar_url || '🌴',
                     bio: pData.bio || ''
                 });
@@ -134,8 +135,24 @@ export function WishlistProvider({ children }) {
                     bio: '',
                     updated_at: new Date().toISOString()
                 };
-                const { data: created } = await supabase.from('profiles').insert(newProfile).select().maybeSingle();
-                if (created) setUserProfile({ ...created, avatar: '🌴', bio: '' });
+                const { data: created, error: iError } = await supabase.from('profiles').insert(newProfile).select().maybeSingle();
+                if (iError) console.error('Error creating profile:', iError);
+                if (created) {
+                    setUserProfile({
+                        ...created,
+                        id: created.id,
+                        avatar: '🌴',
+                        bio: ''
+                    });
+                } else {
+                    // Fallback if insert failed but we have a user
+                    setUserProfile({
+                        id: user.id,
+                        name: user.email?.split('@')[0] || 'Usuario',
+                        avatar: '👤',
+                        bio: ''
+                    });
+                }
             }
 
             // 2. Fetch the rest in parallel
