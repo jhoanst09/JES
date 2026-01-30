@@ -27,3 +27,11 @@ dist-ssr
 .env
 
 .vercel
+.next
+out
+build
+.cache
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

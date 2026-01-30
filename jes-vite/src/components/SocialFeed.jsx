@@ -652,6 +652,7 @@ export default function SocialFeed({ profileUserId = null }) {
                                     placeholder="¿Qué quieres compartir con la comunidad?"
                                     className="w-full bg-transparent border-none focus:ring-0 text-xl font-medium placeholder:text-zinc-400 dark:placeholder:text-zinc-500 min-h-[120px] resize-none pb-12"
                                 />
+                                {/* Forced build update: 2026-01-30 03:26 */}
 
                                 {selectedImage && (
                                     <div className="mt-4 relative group w-fit">
