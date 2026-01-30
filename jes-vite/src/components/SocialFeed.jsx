@@ -299,26 +299,33 @@ export default function SocialFeed({ profileUserId = null }) {
         }
     };
 
-    // Initial load and scroll observer
+    // Initial load effect
     useEffect(() => {
-        fetchPosts(true);
+        if (!authLoading) {
+            console.log('🏁 Auth loaded, triggering initial fetchPosts...');
+            fetchPosts(true);
+        }
+    }, [isLoggedIn, authLoading, profileUserId]);
 
+    // Infinite scroll and Real-time listener
+    useEffect(() => {
+        if (isInitialLoading) return;
+
+        console.log('👀 Setting up observers and listeners...');
         const observer = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting && hasMore && !isFetchingMore) {
                 fetchPosts(false);
             }
-        }, { threshold: 1.0 });
+        }, { threshold: 0.1 });
 
         if (loaderRef.current) observer.observe(loaderRef.current);
 
-        // Smarter Real-time: Just fetch the single newest post when inserted
         const channel = supabase
             .channel(`public:posts:${profileUserId || 'all'}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
-                console.log('✨ New post received!');
+                console.log('✨ New post received in real-time');
                 const newPost = payload.new;
 
-                // Fetch profile for the new post
                 const { data: pData } = await supabase
                     .from('profiles')
                     .select('name, avatar_url')
@@ -326,9 +333,7 @@ export default function SocialFeed({ profileUserId = null }) {
                     .single();
 
                 setPosts(prev => {
-                    // Evitar duplicados si el usuario es el autor y ya se agregó de forma optimista
                     if (prev.some(p => p.id === newPost.id)) return prev;
-
                     return [{
                         id: newPost.id,
                         userId: newPost.user_id,
@@ -352,7 +357,7 @@ export default function SocialFeed({ profileUserId = null }) {
             observer.disconnect();
             supabase.removeChannel(channel);
         };
-    }, [isLoggedIn, profileUserId]);
+    }, [isInitialLoading, hasMore, isFetchingMore, profileUserId]);
 
     const fetchComments = async (postId) => {
         if (loadingComments[postId]) return;

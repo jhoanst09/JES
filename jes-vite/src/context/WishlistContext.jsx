@@ -23,13 +23,13 @@ export function WishlistProvider({ children }) {
         let isMounted = true;
 
         const initAuth = async () => {
-            // Safety timeout - increased to 15s for stability
+            // Safety timeout - reduced to 5s for better UX
             const loadingTimeout = setTimeout(() => {
                 if (isMounted) {
-                    console.warn('⚠️ Auth loading timeout - forcing completion after 15s');
+                    console.warn('⚠️ Auth loading timeout - forcing completion after 5s');
                     setLoading(false);
                 }
-            }, 15000);
+            }, 5000);
 
             try {
                 // UX: Track last visit
@@ -58,14 +58,11 @@ export function WishlistProvider({ children }) {
 
         initAuth();
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+        // Proactive session sync for SocialFeed
+        const syncSession = async (newSession) => {
             if (!isMounted) return;
-
-            console.log('🔄 Auth state changed:', newSession ? 'logged in' : 'logged out');
-
             setSession(newSession);
             setIsLoggedIn(!!newSession);
-
             if (newSession) {
                 await fetchUserData(newSession.user);
             } else {
@@ -73,6 +70,11 @@ export function WishlistProvider({ children }) {
                 setUserProfile({ name: 'Usuario', avatar: '👤', bio: '' });
                 setLoading(false);
             }
+        };
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+            console.log(`🔄 Auth state change (${_event}):`, newSession ? 'logged in' : 'logged out');
+            syncSession(newSession);
         });
 
         return () => {
