@@ -703,18 +703,7 @@ export default function SocialFeed({ profileUserId = null }) {
                                         >
                                             🖼️
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                setShowProductPicker(prev => !prev);
-                                            }}
-                                            className={`text-2xl transition-all cursor-pointer hover:scale-110 active:scale-90 ${taggedProduct ? 'grayscale-0 scale-110' : 'grayscale hover:grayscale-0 opacity-70 hover:opacity-100'}`}
-                                            title="Etiquetar Producto"
-                                        >
-                                            🛒
-                                        </button>
+                                        {/* Cart button temporarily removed per user request */}
                                     </div>
 
                                     {taggedProduct && (
