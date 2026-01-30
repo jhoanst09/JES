@@ -65,11 +65,14 @@ export default function Header() {
                             {/* Logo */}
                             <div className="flex items-center shrink-0">
                                 <Link href="/" className="hover:scale-105 transition-transform active:scale-95">
-                                    <img
-                                        src="/assets/logo.png"
-                                        alt="JES"
-                                        className={`h-9 w-auto object-contain ${!isLightMode ? 'invert brightness-[200%]' : ''}`}
-                                    />
+                                    <div className="flex items-center gap-2">
+                                        <img
+                                            src="/assets/logo.png"
+                                            alt="JES"
+                                            className={`h-8 w-auto invert brightness-200 transition-all duration-500`}
+                                        />
+                                        <span className="text-xl animate-bounce">🚀</span>
+                                    </div>
                                 </Link>
                             </div>
 
