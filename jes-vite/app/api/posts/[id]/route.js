@@ -26,7 +26,8 @@ export async function DELETE(request, { params }) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
-        // Delete cascade: likes, comments, then post
+        // Delete cascade: notifications, likes, comments, then post
+        await db.query('DELETE FROM notifications WHERE post_id = $1', [id]);
         await db.query('DELETE FROM post_likes WHERE post_id = $1', [id]);
         await db.query('DELETE FROM post_comments WHERE post_id = $1', [id]);
         await db.query('DELETE FROM social_posts WHERE id = $1', [id]);

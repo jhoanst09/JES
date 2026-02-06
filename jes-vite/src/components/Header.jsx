@@ -10,6 +10,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useWishlist } from '../context/WishlistContext';
 import CartDrawer from './CartDrawer';
+import NotificationBell from './NotificationBell';
 // import { signOut } from '@/app/auth/actions'; // Replaced by context logout
 import SearchModal from './SearchModal';
 
@@ -89,6 +90,8 @@ export default function Header() {
                                 </Link>
 
                                 <ThemeToggle className="text-zinc-600 dark:text-white/80 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10" />
+
+                                <NotificationBell />
 
                                 <button
                                     onClick={() => setSearchOpen(true)}
