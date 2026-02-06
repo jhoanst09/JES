@@ -1,0 +1,287 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap');
+
+/* ignore unknown at-rules for tailwind */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --bg-primary: #000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary: #18181b;
+  --bg-card: rgba(255, 255, 255, 0.05);
+  --text-primary: #fff;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --icon-color: rgba(255, 255, 255, 0.8);
+}
+
+.light-mode {
+  color-scheme: light;
+  --bg-primary: #fafafa;
+  --bg-secondary: #f4f4f5;
+  --bg-tertiary: #e4e4e7;
+  --bg-card: rgba(0, 0, 0, 0.03);
+  --text-primary: #18181b;
+  --text-secondary: #3f3f46;
+  --text-muted: #52525b;
+  --border-color: rgba(0, 0, 0, 0.1);
+  --icon-color: rgba(0, 0, 0, 0.7);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-primary);
+  min-height: 100vh;
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Hero text - works in both modes */
+.hero-title {
+  color: #fff;
+}
+
+.hero-subtitle {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.light-mode .hero-title {
+  color: #18181b;
+}
+
+.light-mode .hero-subtitle {
+  color: #52525b;
+}
+
+/* ========== LIGHT MODE OVERRIDES ========== */
+
+/* Backgrounds - Core mapping for Tailwind utility overrides */
+.light-mode body {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+.light-mode html {
+  background-color: #fafafa !important;
+}
+
+.light-mode {
+  background-color: #fafafa !important;
+}
+
+.light-mode .bg-black,
+.light-mode .bg-zinc-950,
+.light-mode .bg-zinc-900 {
+  background-color: var(--bg-secondary) !important;
+}
+
+.light-mode .bg-white {
+  background-color: #fff !important;
+  color: #000 !important;
+}
+
+/* Force light background on main containers */
+.light-mode .min-h-screen {
+  background-color: #ffffff !important;
+}
+
+.light-mode div.min-h-screen.bg-white {
+  background-color: #ffffff !important;
+}
+
+/* Cancel Tailwind's dark: variants when in light-mode */
+.light-mode *[class*="dark:bg-black"],
+.light-mode *[class*="dark:bg-zinc-900"],
+.light-mode *[class*="dark:bg-zinc-950"] {
+  background-color: transparent !important;
+}
+
+/* Override dark:text- classes (Removed to allow proper theme handling) */
+
+/* Force black text in inputs for light mode */
+.light-mode input[type="email"],
+.light-mode input[type="password"],
+.light-mode input[type="text"],
+.light-mode textarea {
+  color: #000000 !important;
+}
+
+.light-mode input::placeholder,
+.light-mode textarea::placeholder {
+  color: #A1A1AA !important;
+}
+
+.light-mode .bg-zinc-800 {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* Text Colors */
+.light-mode .text-white:not(.bg-red-500, .bg-red-500 *,
+  .bg-blue-600, .bg-blue-600 *,
+  .bg-blue-500, .bg-blue-500 *,
+  .bg-green-500, .bg-green-500 *,
+  .bg-black, .bg-black *,
+  .bg-zinc-900, .bg-zinc-900 *) {
+  color: var(--text-primary) !important;
+}
+
+.light-mode .text-zinc-400,
+.light-mode .text-zinc-500 {
+  color: var(--text-muted) !important;
+}
+
+/* Borders */
+.light-mode .border-white\/5,
+.light-mode .border-white\/10,
+.light-mode .border-white\/20 {
+  border-color: var(--border-color) !important;
+}
+
+/* Icons and SVGs */
+.light-mode svg {
+  color: var(--icon-color);
+  stroke: currentColor;
+}
+
+.light-mode .text-white:not(.bg-red-500, .bg-red-500 *,
+  .bg-blue-600, .bg-blue-600 *,
+  .bg-blue-500, .bg-blue-500 *,
+  .bg-green-500, .bg-green-500 *,
+  .bg-black, .bg-black *,
+  .bg-zinc-900, .bg-zinc-900 *) svg {
+  color: var(--text-primary) !important;
+}
+
+/* Preserve specific brand colors - Only override if absolutely necessary for readability */
+.light-mode .text-blue-500 {
+  color: #2563eb !important;
+}
+
+.light-mode .text-orange-500 {
+  color: #f97316 !important;
+}
+
+.light-mode .text-green-500 {
+  color: #16a34a !important;
+}
+
+.light-mode .text-red-500 {
+  color: #dc2626 !important;
+}
+
+/* Header specific - invert logo back */
+.light-mode .invert {
+  filter: invert(0) !important;
+}
+
+/* Buttons in light mode */
+.light-mode .bg-white {
+  background-color: #18181b !important;
+  color: white !important;
+}
+
+.light-mode .hover\:bg-white:hover {
+  background-color: #27272a !important;
+}
+
+/* Cards and sections */
+.light-mode .bg-gradient-to-br {
+  background: linear-gradient(to bottom right, var(--bg-secondary), var(--bg-primary)) !important;
+}
+
+.light-mode .bg-gradient-to-b {
+  background: linear-gradient(to bottom, var(--bg-secondary), var(--bg-primary)) !important;
+}
+
+/* Backdrop blur adjustments */
+.light-mode .backdrop-blur-xl,
+.light-mode .backdrop-blur-3xl {
+  background-color: rgba(250, 250, 250, 0.8) !important;
+}
+
+/* Footer and sections */
+.light-mode footer {
+  background-color: var(--bg-secondary) !important;
+}
+
+/* Mobile tab bar */
+.light-mode nav.fixed.bottom-0 {
+  background-color: rgba(250, 250, 250, 0.95) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Preserve image colors in light mode */
+.light-mode img:not(.invert) {
+  filter: none !important;
+}
+
+/* Product cards readability */
+.light-mode [class*="rounded-"] {
+  border-color: var(--border-color);
+}
+
+/* ========== END LIGHT MODE ========== */
+
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: inherit;
+}
+
+@keyframes music-bar {
+  0% {
+    height: 4px;
+  }
+
+  100% {
+    height: 12px;
+  }
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.light-mode .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.light-mode .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.mask-gradient-v {
+  mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
