@@ -1,6 +1,7 @@
 'use client';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
+import { useToast } from './ToastContext';
 import { getProductsByHandles } from '../services/shopify';
 import { useRouter } from 'next/navigation';
 
@@ -25,6 +26,7 @@ export function WishlistProvider({ children }) {
     const [orders, setOrders] = useState([]);
 
     const { user, isLoggedIn, loading: authLoading, signOut: authSignOut } = useAuth();
+    const { showToast } = useToast();
     const router = useRouter();
 
     // ==========================================
@@ -104,6 +106,7 @@ export function WishlistProvider({ children }) {
 
         // Optimistic update
         setWishlist(prev => [...prev, product]);
+        showToast('Añadido a favoritos ❤️', 'success');
 
         try {
             await fetch('/api/wishlist', {
@@ -117,8 +120,9 @@ export function WishlistProvider({ children }) {
         } catch (error) {
             // Rollback
             setWishlist(prev => prev.filter(p => p.handle !== product.handle));
+            showToast('Error al añadir a favoritos', 'error');
         }
-    }, [user?.id]);
+    }, [user?.id, showToast]);
 
     const removeFromWishlist = useCallback(async (productHandle) => {
         if (!user?.id) return;
@@ -126,6 +130,7 @@ export function WishlistProvider({ children }) {
         // Optimistic update
         const prev = wishlist;
         setWishlist(curr => curr.filter(p => p.handle !== productHandle));
+        showToast('Eliminado de favoritos', 'info');
 
         try {
             await fetch('/api/wishlist', {
@@ -139,8 +144,9 @@ export function WishlistProvider({ children }) {
         } catch (error) {
             // Rollback
             setWishlist(prev);
+            showToast('Error al eliminar de favoritos', 'error');
         }
-    }, [user?.id, wishlist]);
+    }, [user?.id, wishlist, showToast]);
 
     const isInWishlist = useCallback((handle) => {
         return (wishlist || []).some(p => p.handle === handle);

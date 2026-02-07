@@ -4,6 +4,7 @@ import { AuthProvider } from '../src/context/AuthContext';
 import { WishlistProvider } from '../src/context/WishlistContext';
 import { CartProvider } from '../src/context/CartContext';
 import { ThemeProvider } from '../src/context/ThemeContext';
+import { ToastProvider } from '../src/context/ToastContext';
 import { TerminalProvider, useTerminal } from '../src/context/TerminalContext';
 import PurchaseTerminal from '../src/components/PurchaseTerminal';
 import AIAssistant from '../src/components/AIAssistant';
@@ -28,15 +29,17 @@ export function Providers({ children, initialUser, sessionValidated = false, non
             initialUserId={initialUser?.id || null}
         >
             <ThemeProvider>
-                <WishlistProvider initialUser={initialUser}>
-                    <CartProvider>
-                        <TerminalProvider>
-                            <GlobalComponents>
-                                {children}
-                            </GlobalComponents>
-                        </TerminalProvider>
-                    </CartProvider>
-                </WishlistProvider>
+                <ToastProvider>
+                    <WishlistProvider initialUser={initialUser}>
+                        <CartProvider>
+                            <TerminalProvider>
+                                <GlobalComponents>
+                                    {children}
+                                </GlobalComponents>
+                            </TerminalProvider>
+                        </CartProvider>
+                    </WishlistProvider>
+                </ToastProvider>
             </ThemeProvider>
         </AuthProvider>
     );
