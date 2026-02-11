@@ -231,7 +231,10 @@ export function WishlistProvider({ children }) {
     }, [fetchUserData, showToast]);
 
     const toggleFollow = useCallback(async (targetUserId) => {
-        if (!user?.id) return;
+        if (!user?.id) {
+            showToast('Inicia sesión para añadir amigos', 'info');
+            return;
+        }
         setSocialLoading(prev => ({ ...prev, [targetUserId]: true }));
         try {
             const res = await fetch('/api/friends/follow', {
@@ -240,14 +243,25 @@ export function WishlistProvider({ children }) {
                 body: JSON.stringify({ userId: user.id, targetUserId }),
             });
             if (res.ok) {
+                const data = await res.json();
+                if (data.action === 'requested') {
+                    showToast('Solicitud de amistad enviada 🤝', 'success');
+                    setSentFollowRequests(prev => [...prev, targetUserId]);
+                } else if (data.action === 'unfollowed') {
+                    showToast('Amistad eliminada', 'info');
+                    setFollowing(prev => prev.filter(id => id !== targetUserId));
+                }
                 await fetchUserData();
+            } else {
+                showToast('Error al procesar solicitud', 'error');
             }
         } catch (error) {
             console.error('Error toggle follow:', error);
+            showToast('Error de conexión', 'error');
         } finally {
             setSocialLoading(prev => ({ ...prev, [targetUserId]: false }));
         }
-    }, [user?.id, fetchUserData]);
+    }, [user?.id, fetchUserData, showToast]);
 
     const logout = useCallback(async () => {
         // Clear all local states first
