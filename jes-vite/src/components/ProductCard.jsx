@@ -1,19 +1,17 @@
 'use client';
-import { useState, useCallback, memo } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useCallback, useRef, useEffect, memo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useWishlist } from '@/src/context/WishlistContext';
 import { useCart } from '@/src/context/CartContext';
 
 /**
- * ProductCard - Borderless Floating Design
+ * ProductCard - Clean Minimal Design
  * 
- * Accepts BOTH legacy props (nombre, precio, image, handle) AND new product object
- * 
- * 3 Action Buttons:
- * 1. 🛒 Añadir al Carrito
- * 2. Comprar Ahora  
- * 3. 🐄 Hacer Vaca (Social Commerce)
+ * 3 clear actions:
+ * 1. 🛒 Agregar al Carrito (hover overlay)
+ * 2. Comprar Ahora (below card)
+ * 3. 🎁 Regalar → dropdown with "Hacer Vaca" option
  */
 const ProductCard = memo(function ProductCard({
     // Legacy props (backwards compatible)
@@ -32,6 +30,8 @@ const ProductCard = memo(function ProductCard({
     const [imageLoaded, setImageLoaded] = useState(false);
     const [showActions, setShowActions] = useState(false);
     const [addedToCart, setAddedToCart] = useState(false);
+    const [showGiftMenu, setShowGiftMenu] = useState(false);
+    const giftMenuRef = useRef(null);
 
     // Normalize data - accept both legacy props and product object
     const title = nombre || product?.title || 'Producto';
@@ -52,6 +52,18 @@ const ProductCard = memo(function ProductCard({
         images: { edges: [{ node: { url: imageUrl } }] },
         priceRange: { minVariantPrice: { amount: priceValue, currencyCode: currency } }
     };
+
+    // Close gift menu on outside click
+    useEffect(() => {
+        if (!showGiftMenu) return;
+        const handleClick = (e) => {
+            if (giftMenuRef.current && !giftMenuRef.current.contains(e.target)) {
+                setShowGiftMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [showGiftMenu]);
 
     const formatPrice = (amount) => {
         if (typeof amount === 'string' && amount.includes('$')) return amount;
@@ -85,6 +97,7 @@ const ProductCard = memo(function ProductCard({
     const handleSocialCommerce = useCallback((e) => {
         e.preventDefault();
         e.stopPropagation();
+        setShowGiftMenu(false);
         onBagCreate?.(productData);
     }, [productData, onBagCreate]);
 
@@ -104,17 +117,14 @@ const ProductCard = memo(function ProductCard({
             onMouseLeave={() => setShowActions(false)}
         >
             <Link href={`/product/${productHandle}`} className="block">
-                {/* IMAGE - BORDERLESS with shadow for depth */}
+                {/* IMAGE */}
                 <div className="relative aspect-square overflow-hidden rounded-2xl mb-4">
-                    {/* Floating shadow effect */}
                     <div className="absolute -inset-2 bg-gradient-to-b from-transparent via-transparent to-black/20 rounded-3xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
 
-                    {/* Skeleton loader */}
                     {!imageLoaded && (
                         <div className="absolute inset-0 bg-zinc-800/50 animate-pulse rounded-2xl" />
                     )}
 
-                    {/* Product Image - NO BORDERS */}
                     <motion.img
                         src={imageUrl}
                         alt={title}
@@ -127,21 +137,19 @@ const ProductCard = memo(function ProductCard({
                             } group-hover:scale-110`}
                     />
 
-                    {/* Discount Badge */}
                     {hasDiscount && (
                         <div className="absolute top-3 left-3 px-3 py-1 bg-red-500/90 backdrop-blur-sm text-white text-xs font-bold rounded-full">
                             -{discountPercent}%
                         </div>
                     )}
 
-                    {/* Sold Out Overlay */}
                     {!available && (
                         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center rounded-2xl">
                             <span className="text-white font-medium tracking-wide">AGOTADO</span>
                         </div>
                     )}
 
-                    {/* Wishlist Button - Glass style */}
+                    {/* Wishlist Button */}
                     <button
                         onClick={handleWishlist}
                         className="absolute top-3 right-3 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-md text-white hover:bg-black/50 hover:scale-110 transition-all"
@@ -149,7 +157,7 @@ const ProductCard = memo(function ProductCard({
                         {isInWishlist ? '❤️' : '🤍'}
                     </button>
 
-                    {/* HOVER ACTIONS - Transparent overlay */}
+                    {/* HOVER: Add to Cart only */}
                     <motion.div
                         initial={false}
                         animate={{
@@ -159,32 +167,20 @@ const ProductCard = memo(function ProductCard({
                         transition={{ duration: 0.2 }}
                         className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 via-black/50 to-transparent rounded-b-2xl"
                     >
-                        <div className="flex gap-2">
-                            {/* Add to Cart - Glass button */}
-                            <button
-                                onClick={handleAddToCart}
-                                disabled={!available}
-                                className={`flex-1 py-3 rounded-xl text-sm font-semibold backdrop-blur-md transition-all ${addedToCart
-                                    ? 'bg-green-500/90 text-white'
-                                    : 'bg-white/90 text-black hover:bg-white'
-                                    } disabled:opacity-40 disabled:cursor-not-allowed`}
-                            >
-                                {addedToCart ? '✓ Añadido' : '🛒 Agregar'}
-                            </button>
-
-                            {/* Social Commerce (Vaca) - Glass accent */}
-                            <button
-                                onClick={handleSocialCommerce}
-                                className="px-4 py-3 rounded-xl bg-white/20 backdrop-blur-md text-white text-lg hover:bg-white/30 transition-all"
-                                title="Hacer Vaca"
-                            >
-                                🐄
-                            </button>
-                        </div>
+                        <button
+                            onClick={handleAddToCart}
+                            disabled={!available}
+                            className={`w-full py-3 rounded-xl text-sm font-semibold backdrop-blur-md transition-all ${addedToCart
+                                ? 'bg-green-500/90 text-white'
+                                : 'bg-white/90 text-black hover:bg-white'
+                                } disabled:opacity-40 disabled:cursor-not-allowed`}
+                        >
+                            {addedToCart ? '✓ Añadido' : '🛒 Agregar'}
+                        </button>
                     </motion.div>
                 </div>
 
-                {/* PRODUCT INFO - Clean minimal typography */}
+                {/* PRODUCT INFO */}
                 <div className="space-y-2">
                     <h3 className="text-white font-medium text-base line-clamp-2 leading-snug group-hover:text-zinc-300 transition-colors">
                         {title}
@@ -203,25 +199,57 @@ const ProductCard = memo(function ProductCard({
                 </div>
             </Link>
 
-            {/* BOTTOM ACTIONS - Full width, transparent */}
-            <div className="mt-4 space-y-2">
-                {/* Buy Now - Solid white */}
+            {/* BOTTOM ACTIONS — 2 buttons side by side */}
+            <div className="mt-4 flex gap-2">
+                {/* Buy Now */}
                 <button
                     onClick={handleBuyNow}
                     disabled={!available}
-                    className="w-full py-3.5 bg-white text-black rounded-xl font-semibold hover:bg-zinc-100 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex-1 py-3 bg-white text-black rounded-xl font-semibold text-sm hover:bg-zinc-100 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                     Comprar Ahora
                 </button>
 
-                {/* Social Commerce - Transparent border */}
-                <button
-                    onClick={handleSocialCommerce}
-                    className="w-full py-3.5 bg-transparent border border-white/20 text-white rounded-xl font-medium hover:bg-white/5 hover:border-white/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                >
-                    <span>🐄</span>
-                    <span>Hacer Vaca</span>
-                </button>
+                {/* Gift / Regalar — dropdown */}
+                <div className="relative" ref={giftMenuRef}>
+                    <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowGiftMenu(!showGiftMenu); }}
+                        className="px-4 py-3 bg-transparent border border-white/20 text-white rounded-xl font-medium hover:bg-white/5 hover:border-white/30 active:scale-[0.98] transition-all text-sm"
+                    >
+                        🎁 Regalar
+                    </button>
+
+                    <AnimatePresence>
+                        {showGiftMenu && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: -5 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, y: -5 }}
+                                transition={{ duration: 0.15 }}
+                                className="absolute bottom-full right-0 mb-2 w-48 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
+                            >
+                                <button
+                                    onClick={handleSocialCommerce}
+                                    className="w-full text-left px-4 py-3 text-white text-sm hover:bg-white/10 transition-colors flex items-center gap-2"
+                                >
+                                    🐄 Hacer Vaca
+                                </button>
+                                <button
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setShowGiftMenu(false);
+                                        // Copy share link
+                                        navigator.clipboard?.writeText(`${window.location.origin}/product/${productHandle}`);
+                                    }}
+                                    className="w-full text-left px-4 py-3 text-white text-sm hover:bg-white/10 transition-colors flex items-center gap-2 border-t border-white/5"
+                                >
+                                    🔗 Compartir
+                                </button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
             </div>
         </motion.div>
     );
