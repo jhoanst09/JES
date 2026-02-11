@@ -4,6 +4,7 @@ import { uploadToS3 } from '../utils/s3';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useWishlist } from '../context/WishlistContext';
 
 /**
  * SocialFeed - Clean AWS Architecture
@@ -229,14 +230,18 @@ const CommentSection = ({ postId, currentUserId, authorName }) => {
 // ==========================================
 // POST CARD COMPONENT
 // ==========================================
-const PostCard = memo(({ post, currentUserId, onLike, onDelete }) => {
+const PostCard = memo(({ post, currentUserId, onLike, onDelete, friendIds, sentRequestIds, onSendFriendRequest }) => {
     const [likes, setLikes] = useState(post.likes_count || 0);
     const [liked, setLiked] = useState(false);
     const [showComments, setShowComments] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const [showReportModal, setShowReportModal] = useState(false);
+    const [localSent, setLocalSent] = useState(false);
 
     const isAuthor = post.user_id === currentUserId;
+    const isFriend = friendIds.includes(post.user_id);
+    const isPending = localSent || sentRequestIds.includes(post.user_id);
+    const friendStatus = isFriend ? 'friend' : isPending ? 'pending' : 'none';
 
     const handleLike = async () => {
         setLiked(!liked);
@@ -275,13 +280,38 @@ const PostCard = memo(({ post, currentUserId, onLike, onDelete }) => {
                             </span>
                         )}
                     </div>
-                    <div>
-                        <p className="font-black text-zinc-900 dark:text-white leading-tight tracking-tight">
-                            {post.author_name || 'Usuario'}
-                        </p>
-                        <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mt-0.5">
-                            {new Date(post.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-                        </p>
+                    <div className="flex items-center gap-2">
+                        <div>
+                            <p className="font-black text-zinc-900 dark:text-white leading-tight tracking-tight">
+                                {post.author_name || 'Usuario'}
+                            </p>
+                            <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mt-0.5">
+                                {new Date(post.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                            </p>
+                        </div>
+                        {!isAuthor && currentUserId && friendStatus === 'none' && (
+                            <button
+                                onClick={async () => {
+                                    setLocalSent(true);
+                                    if (onSendFriendRequest) {
+                                        await onSendFriendRequest(post.user_id);
+                                    }
+                                }}
+                                className="px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white rounded-full hover:bg-amber-600 hover:scale-105 active:scale-95 transition-all shadow-md"
+                            >
+                                Añadir 🤝
+                            </button>
+                        )}
+                        {!isAuthor && friendStatus === 'pending' && (
+                            <span className="px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 rounded-full">
+                                Pendiente ⏳
+                            </span>
+                        )}
+                        {!isAuthor && friendStatus === 'friend' && (
+                            <span className="px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full">
+                                Amigos ✅
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -342,32 +372,36 @@ const PostCard = memo(({ post, currentUserId, onLike, onDelete }) => {
             </div>
 
             {/* Content */}
-            {post.content && (
-                <p className="text-zinc-800 dark:text-zinc-200 text-base mb-4 leading-relaxed font-medium">
-                    {post.content}
-                </p>
-            )}
+            {
+                post.content && (
+                    <p className="text-zinc-800 dark:text-zinc-200 text-base mb-4 leading-relaxed font-medium">
+                        {post.content}
+                    </p>
+                )
+            }
 
             {/* Media */}
-            {post.media_url && (
-                <div className="mb-4 rounded-3xl overflow-hidden shadow-sm border border-black/5 dark:border-white/5">
-                    {post.media_type?.startsWith('video') ? (
-                        <video
-                            src={post.media_url}
-                            controls
-                            className="w-full max-h-[500px] object-cover"
-                            onError={(e) => { e.target.style.display = 'none'; }}
-                        />
-                    ) : (
-                        <img
-                            src={post.media_url}
-                            alt=""
-                            className="w-full max-h-[500px] object-cover"
-                            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?w=800&q=80'; }}
-                        />
-                    )}
-                </div>
-            )}
+            {
+                post.media_url && (
+                    <div className="mb-4 rounded-3xl overflow-hidden shadow-sm border border-black/5 dark:border-white/5">
+                        {post.media_type?.startsWith('video') ? (
+                            <video
+                                src={post.media_url}
+                                controls
+                                className="w-full max-h-[500px] object-cover"
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                            />
+                        ) : (
+                            <img
+                                src={post.media_url}
+                                alt=""
+                                className="w-full max-h-[500px] object-cover"
+                                onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?w=800&q=80'; }}
+                            />
+                        )}
+                    </div>
+                )
+            }
 
             {/* Post Actions */}
             <div className="flex items-center gap-6 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
@@ -404,7 +438,7 @@ const PostCard = memo(({ post, currentUserId, onLike, onDelete }) => {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </motion.div>
+        </motion.div >
     );
 });
 
@@ -415,11 +449,14 @@ PostCard.displayName = 'PostCard';
 // ==========================================
 export default function SocialFeed() {
     const { user, isLoggedIn } = useAuth();
+    const { sendFriendRequest } = useWishlist() || {};
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [posting, setPosting] = useState(false);
     const [newPostText, setNewPostText] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
+    const [friendIds, setFriendIds] = useState([]);
+    const [sentRequestIds, setSentRequestIds] = useState([]);
     const fileInputRef = useRef(null);
 
     // ==========================================
@@ -440,6 +477,34 @@ export default function SocialFeed() {
     useEffect(() => {
         fetchPosts();
     }, [fetchPosts]);
+
+    // Fetch friend data once for the logged-in user
+    useEffect(() => {
+        if (!user?.id) return;
+        (async () => {
+            try {
+                const res = await fetch(`/api/friends?userId=${user.id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setFriendIds((data.friends || []).map(f => f.id));
+                    setSentRequestIds(data.sentRequests || []);
+                }
+            } catch (e) { /* ignore */ }
+        })();
+    }, [user?.id]);
+
+    const handleSendFriendRequest = useCallback(async (friendId) => {
+        setSentRequestIds(prev => [...prev, friendId]);
+        if (sendFriendRequest) {
+            await sendFriendRequest(friendId);
+        } else {
+            await fetch('/api/friends/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, friendId }),
+            });
+        }
+    }, [user?.id, sendFriendRequest]);
 
     // ==========================================
     // CREATE POST
@@ -614,6 +679,9 @@ export default function SocialFeed() {
                             currentUserId={user?.id}
                             onLike={handleLike}
                             onDelete={handleDelete}
+                            friendIds={friendIds}
+                            sentRequestIds={sentRequestIds}
+                            onSendFriendRequest={handleSendFriendRequest}
                         />
                     ))}
                 </div>
