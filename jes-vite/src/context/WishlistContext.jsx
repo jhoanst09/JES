@@ -152,6 +152,22 @@ export function WishlistProvider({ children }) {
         return (wishlist || []).some(p => p.handle === handle);
     }, [wishlist]);
 
+    // Toggle wishlist (used by ProductCard)
+    const toggleWishlist = useCallback(async (product) => {
+        if (!user?.id) {
+            showToast('Inicia sesión para usar favoritos', 'info');
+            return;
+        }
+        const handle = product?.handle;
+        if (!handle) return;
+
+        if (isInWishlist(handle)) {
+            await removeFromWishlist(handle);
+        } else {
+            await addToWishlist(product);
+        }
+    }, [user?.id, isInWishlist, addToWishlist, removeFromWishlist, showToast]);
+
     // ==========================================
     // PROFILE ACTIONS
     // ==========================================
@@ -180,7 +196,10 @@ export function WishlistProvider({ children }) {
     // FRIEND ACTIONS
     // ==========================================
     const sendFriendRequest = useCallback(async (friendId) => {
-        if (!user?.id) return;
+        if (!user?.id) {
+            showToast('Inicia sesión para añadir amigos', 'info');
+            return;
+        }
 
         try {
             await fetch('/api/friends/request', {
@@ -188,10 +207,13 @@ export function WishlistProvider({ children }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user.id, friendId }),
             });
+            showToast('Solicitud de amistad enviada 🤝', 'success');
+            setSentFollowRequests(prev => [...prev, friendId]);
         } catch (error) {
             console.error('Error sending friend request:', error);
+            showToast('Error al enviar solicitud', 'error');
         }
-    }, [user?.id]);
+    }, [user?.id, showToast]);
 
     const acceptFriendRequest = useCallback(async (requestId) => {
         try {
@@ -200,11 +222,13 @@ export function WishlistProvider({ children }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ requestId }),
             });
+            showToast('Solicitud aceptada ✅', 'success');
             await fetchUserData();
         } catch (error) {
             console.error('Error accepting friend request:', error);
+            showToast('Error al aceptar solicitud', 'error');
         }
-    }, [fetchUserData]);
+    }, [fetchUserData, showToast]);
 
     const toggleFollow = useCallback(async (targetUserId) => {
         if (!user?.id) return;
@@ -258,6 +282,7 @@ export function WishlistProvider({ children }) {
             addToWishlist,
             removeFromWishlist,
             isInWishlist,
+            toggleWishlist,
 
             // Profile
             updateProfile,

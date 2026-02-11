@@ -3,6 +3,7 @@ import { useRef, useEffect, memo, useCallback, useState } from 'react';
 import { uploadToS3 } from '../utils/s3';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 /**
  * SocialFeed - Clean AWS Architecture
@@ -66,6 +67,7 @@ const CommentSection = ({ postId, currentUserId, authorName }) => {
     const [loading, setLoading] = useState(true);
     const [newComment, setNewComment] = useState('');
     const [replyTo, setReplyTo] = useState(null);
+    const { showToast } = useToast();
 
     const fetchComments = useCallback(async () => {
         try {
@@ -102,10 +104,13 @@ const CommentSection = ({ postId, currentUserId, authorName }) => {
             if (comment) {
                 setComments(prev => [...prev, comment]);
                 setNewComment('');
+                const wasReply = !!replyTo;
                 setReplyTo(null);
+                showToast(wasReply ? 'Respuesta enviada 💬' : 'Comentario publicado ✅', 'success');
             }
         } catch (error) {
             console.error('Error sending comment:', error);
+            showToast('Error al enviar comentario', 'error');
         }
     };
 

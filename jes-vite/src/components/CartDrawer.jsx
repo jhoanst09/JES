@@ -4,6 +4,30 @@ import { useCart } from '../context/CartContext';
 export default function CartDrawer() {
     const { cart, removeFromCart, updateQuantity, cartTotal, isCartOpen, setIsCartOpen, clearCart, startCheckout, isCheckingOut } = useCart();
 
+    // Helper to extract image URL from various product formats
+    const getImage = (item) =>
+        item.image ||
+        item.images?.edges?.[0]?.node?.url ||
+        item.featuredImage?.url ||
+        '/placeholder.jpg';
+
+    // Helper to extract display price
+    const getPrice = (item) => {
+        if (item.price) return item.price;
+        const amount = item.priceRange?.minVariantPrice?.amount;
+        if (amount) {
+            return new Intl.NumberFormat('es-CO', {
+                style: 'currency',
+                currency: 'COP',
+                minimumFractionDigits: 0,
+            }).format(amount);
+        }
+        return '$0';
+    };
+
+    // Use product_handle or handle (backwards compat)
+    const getHandle = (item) => item.product_handle || item.handle || '';
+
     return (
         <AnimatePresence>
             {isCartOpen && (
@@ -42,49 +66,52 @@ export default function CartDrawer() {
                         {/* Items List */}
                         <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
                             {cart.length > 0 ? (
-                                cart.map((item, idx) => (
-                                    <motion.div
-                                        key={item.handle}
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: idx * 0.05 }}
-                                        className="flex gap-4 p-4 bg-zinc-50 dark:bg-white/5 rounded-3xl border border-black/5 dark:border-white/5 hover:border-blue-500/20 transition-all group"
-                                    >
-                                        <div className="w-24 h-24 bg-zinc-100 dark:bg-black rounded-2xl overflow-hidden flex-shrink-0 border border-black/5 dark:border-white/5">
-                                            <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                                        </div>
-                                        <div className="flex-1 flex flex-col justify-between py-1">
-                                            <div className="space-y-1">
-                                                <h3 className="font-bold text-sm line-clamp-1 text-zinc-900 dark:text-white transition-colors">{item.title}</h3>
-                                                <p className="text-blue-500 font-black text-xs">{item.price}</p>
+                                cart.map((item, idx) => {
+                                    const handle = getHandle(item);
+                                    return (
+                                        <motion.div
+                                            key={handle || idx}
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: idx * 0.05 }}
+                                            className="flex gap-4 p-4 bg-zinc-50 dark:bg-white/5 rounded-3xl border border-black/5 dark:border-white/5 hover:border-blue-500/20 transition-all group"
+                                        >
+                                            <div className="w-24 h-24 bg-zinc-100 dark:bg-black rounded-2xl overflow-hidden flex-shrink-0 border border-black/5 dark:border-white/5">
+                                                <img src={getImage(item)} alt={item.title || 'Producto'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                                             </div>
+                                            <div className="flex-1 flex flex-col justify-between py-1">
+                                                <div className="space-y-1">
+                                                    <h3 className="font-bold text-sm line-clamp-1 text-zinc-900 dark:text-white transition-colors">{item.title || 'Producto'}</h3>
+                                                    <p className="text-blue-500 font-black text-xs">{getPrice(item)}</p>
+                                                </div>
 
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center bg-black/5 dark:bg-black/50 rounded-xl border border-black/5 dark:border-white/5 overflow-hidden">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center bg-black/5 dark:bg-black/50 rounded-xl border border-black/5 dark:border-white/5 overflow-hidden">
+                                                        <button
+                                                            onClick={() => updateQuantity(handle, -1)}
+                                                            className="px-3 py-1 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-600 dark:text-white transition-colors"
+                                                        >
+                                                            -
+                                                        </button>
+                                                        <span className="px-3 text-xs font-bold text-zinc-900 dark:text-white">{item.quantity}</span>
+                                                        <button
+                                                            onClick={() => updateQuantity(handle, 1)}
+                                                            className="px-3 py-1 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-600 dark:text-white transition-colors"
+                                                        >
+                                                            +
+                                                        </button>
+                                                    </div>
                                                     <button
-                                                        onClick={() => updateQuantity(item.handle, -1)}
-                                                        className="px-3 py-1 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-600 dark:text-white transition-colors"
+                                                        onClick={() => removeFromCart(handle)}
+                                                        className="p-2 text-zinc-500 hover:text-red-500 transition-colors"
                                                     >
-                                                        -
-                                                    </button>
-                                                    <span className="px-3 text-xs font-bold text-zinc-900 dark:text-white">{item.quantity}</span>
-                                                    <button
-                                                        onClick={() => updateQuantity(item.handle, 1)}
-                                                        className="px-3 py-1 hover:bg-black/5 dark:hover:bg-white/10 text-zinc-600 dark:text-white transition-colors"
-                                                    >
-                                                        +
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
                                                     </button>
                                                 </div>
-                                                <button
-                                                    onClick={() => removeFromCart(item.handle)}
-                                                    className="p-2 text-zinc-500 hover:text-red-500 transition-colors"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
-                                                </button>
                                             </div>
-                                        </div>
-                                    </motion.div>
-                                ))
+                                        </motion.div>
+                                    );
+                                })
                             ) : (
                                 <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-30">
                                     <span className="text-6xl">🥥</span>

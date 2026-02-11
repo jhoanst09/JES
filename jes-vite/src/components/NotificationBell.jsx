@@ -35,7 +35,6 @@ export default function NotificationBell() {
 
     useEffect(() => {
         fetchNotifications();
-        // Poll every 30 seconds for new notifications
         const interval = setInterval(fetchNotifications, 30000);
         return () => clearInterval(interval);
     }, [fetchNotifications]);
@@ -75,111 +74,101 @@ export default function NotificationBell() {
     if (!isLoggedIn) return null;
 
     return (
-        <div className=\"relative\">
-    {/* Bell Button */ }
-    <button
-        onClick={() => setIsOpen(!isOpen)}
-        className=\"relative p-3 rounded-2xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all\"
-    aria - label=\"Notificaciones\"
-        >
-        <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" strokeWidth=\"2.5\" strokeLinecap=\"round\" strokeLinejoin=\"round\">
-            < path d =\"M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9\" />
-                < path d =\"M13.73 21a2 2 0 0 1-3.46 0\" />
-                </svg >
-
-        {/* Red Dot Badge */ }
-    {
-        unreadCount > 0 && (
-            <span className=\"absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse\" />
-                )
-    }
-            </button >
-
-        {/* Dropdown */ }
-        < AnimatePresence >
-        { isOpen && (
-            <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className=\"absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-3xl shadow-2xl z-50\"
-                    >
-                    {/* Header */ }
-                    < div className =\"sticky top-0 bg-white dark:bg-zinc-900 border-b border-black/5 dark:border-white/5 p-4 flex items-center justify-between\">
-                        < h3 className =\"font-black text-sm uppercase tracking-wider\">Notificaciones</h3>
-    {
-        unreadCount > 0 && (
+        <div className="relative">
+            {/* Bell Button */}
             <button
-                onClick={markAllAsRead}
-                className=\"text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline\"
-                    >
-                    Marcar todas
-                                </button >
-                            )
-    }
-                        </div >
+                onClick={() => setIsOpen(!isOpen)}
+                className="relative p-3 rounded-2xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
+                aria-label="Notificaciones"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
 
-        {/* Notifications List */ }
-        < div className =\"p-2\">
-    {
-        loading ? (
-            <div className=\"py-8 text-center text-zinc-500 text-sm\">Cargando...</div>
+                {/* Red Dot Badge */}
+                {unreadCount > 0 && (
+                    <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                )}
+            </button>
+
+            {/* Dropdown */}
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-white dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-3xl shadow-2xl z-50"
+                    >
+                        {/* Header */}
+                        <div className="sticky top-0 bg-white dark:bg-zinc-900 border-b border-black/5 dark:border-white/5 p-4 flex items-center justify-between">
+                            <h3 className="font-black text-sm uppercase tracking-wider">Notificaciones</h3>
+                            {unreadCount > 0 && (
+                                <button
+                                    onClick={markAllAsRead}
+                                    className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline"
+                                >
+                                    Marcar todas
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Notifications List */}
+                        <div className="p-2">
+                            {loading ? (
+                                <div className="py-8 text-center text-zinc-500 text-sm">Cargando...</div>
                             ) : notifications.length === 0 ? (
-            <div className=\"py-8 text-center text-zinc-500 text-sm\">
+                                <div className="py-8 text-center text-zinc-500 text-sm">
                                     No hay notificaciones
-                                </div >
+                                </div>
                             ) : (
-            notifications.slice(0, 10).map(notif => (
+                                notifications.slice(0, 10).map(notif => (
                                     <button
                                         key={notif.id}
                                         onClick={() => handleNotificationClick(notif)}
-                                        className={`w-full text-left p-3 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all mb-1 ${
-                                            !notif.is_read ? 'bg-blue-50 dark:bg-blue-900/10' : ''
-                                        }`}
+                                        className={`w-full text-left p-3 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all mb-1 ${!notif.is_read ? 'bg-blue-50 dark:bg-blue-900/10' : ''
+                                            }`}
                                     >
-                                        <div className=\"flex items-start gap-3\">
-                                            <div className=\"w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-black text-xs\">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-black text-xs">
                                                 {notif.actor_name?.charAt(0).toUpperCase() || '?'}
                                             </div>
-                                            <div className=\"flex-1 min-w-0\">
-            < p className =\"text-sm font-bold\">
-            < span className =\"text-blue-600 dark:text-blue-400\">{notif.actor_name}</span>
-                                                    { notif.type === 'comment_reply' && ' respondió tu comentario' }
-                                                    { notif.type === 'mention' && ' te mencionó' }
-                                                    { notif.type === 'like' && ' le gustó tu post' }
-                                                </p >
-                {
-                    notif.post_content && (
-                        <p className=\"text-xs text-zinc-500 dark:text-zinc-400 truncate mt-1\">
-                                                        { notif.post_content }
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold">
+                                                    <span className="text-blue-600 dark:text-blue-400">{notif.actor_name}</span>
+                                                    {notif.type === 'comment_reply' && ' respondió tu comentario'}
+                                                    {notif.type === 'mention' && ' te mencionó'}
+                                                    {notif.type === 'like' && ' le gustó tu post'}
+                                                </p>
+                                                {notif.post_content && (
+                                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-1">
+                                                        {notif.post_content}
                                                     </p>
                                                 )}
-    <p className=\"text-[10px] text-zinc-400 mt-1 uppercase tracking-widest font-bold\">
-    { new Date(notif.created_at).toLocaleDateString('es', { month: 'short', day: 'numeric' }) }
-                                                </p >
-                                            </div >
-        {!notif.is_read && (
-            <div className=\"w-2 h-2 rounded-full bg-blue-500 flex-shrink-0\" />
-                                            )
-}
-                                        </div >
-                                    </button >
+                                                <p className="text-[10px] text-zinc-400 mt-1 uppercase tracking-widest font-bold">
+                                                    {new Date(notif.created_at).toLocaleDateString('es', { month: 'short', day: 'numeric' })}
+                                                </p>
+                                            </div>
+                                            {!notif.is_read && (
+                                                <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                                            )}
+                                        </div>
+                                    </button>
                                 ))
                             )}
-                        </div >
-                    </motion.div >
+                        </div>
+                    </motion.div>
                 )}
-            </AnimatePresence >
+            </AnimatePresence>
 
-    {/* Backdrop */ }
-{
-    isOpen && (
-        <div
-            className=\"fixed inset-0 z-40\"
-    onClick = {() => setIsOpen(false)
-}
+            {/* Backdrop */}
+            {isOpen && (
+                <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsOpen(false)}
                 />
             )}
-        </div >
+        </div>
     );
 }

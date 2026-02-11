@@ -3,6 +3,7 @@ import { useState, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useWishlist } from '@/src/context/WishlistContext';
+import { useCart } from '@/src/context/CartContext';
 
 /**
  * ProductCard - Borderless Floating Design
@@ -26,7 +27,8 @@ const ProductCard = memo(function ProductCard({
     index = 0,
     onBagCreate
 }) {
-    const { addToCart, toggleWishlist, wishlist } = useWishlist() || {};
+    const { toggleWishlist, wishlist } = useWishlist() || {};
+    const { addToCart } = useCart() || {};
     const [imageLoaded, setImageLoaded] = useState(false);
     const [showActions, setShowActions] = useState(false);
     const [addedToCart, setAddedToCart] = useState(false);
