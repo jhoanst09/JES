@@ -4,7 +4,7 @@ import db from '@/src/utils/db/postgres';
 /**
  * POST /api/friends/follow - Toggle follow/unfriend a user
  * 
- * If no friendship exists → send friend request (pending)
+ * If no friendship exists → send friend request (pending) + notify
  * If friendship exists and is accepted → remove (unfriend)
  * If friendship exists and is pending → cancel the request
  */
@@ -40,12 +40,23 @@ export async function POST(request) {
             });
         } else {
             // No friendship → create a pending friend request
-            await db.query(
+            const result = await db.queryOne(
                 `INSERT INTO friendships (user_id, friend_id, status)
                  VALUES ($1, $2, 'pending')
-                 ON CONFLICT (user_id, friend_id) DO NOTHING`,
+                 ON CONFLICT (user_id, friend_id) DO NOTHING
+                 RETURNING id`,
                 [userId, targetUserId]
             );
+
+            // Create notification for the target user
+            if (result?.id) {
+                await db.query(
+                    `INSERT INTO notifications (user_id, actor_id, type)
+                     VALUES ($1, $2, 'friend_request')`,
+                    [targetUserId, userId]
+                );
+            }
+
             return NextResponse.json({
                 action: 'requested',
                 message: 'Solicitud enviada'

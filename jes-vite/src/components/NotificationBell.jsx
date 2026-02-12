@@ -65,10 +65,51 @@ export default function NotificationBell() {
         }
     };
 
+    const getNotificationRoute = (notification) => {
+        switch (notification.type) {
+            case 'friend_request':
+            case 'friend_accepted':
+                return '/chat'; // Friends are managed from chat page
+            case 'gift':
+            case 'vaca':
+                return '/chat';
+            default:
+                return notification.post_id ? `/?post=${notification.post_id}` : '/';
+        }
+    };
+
+    const getNotificationMessage = (type) => {
+        switch (type) {
+            case 'comment_reply': return ' respondió tu comentario';
+            case 'mention': return ' te mencionó';
+            case 'like': return ' le gustó tu post';
+            case 'follow': return ' te empezó a seguir';
+            case 'friend_request': return ' te envió solicitud de amistad';
+            case 'friend_accepted': return ' aceptó tu solicitud de amistad';
+            case 'gift': return ' te envió un regalo 🎁';
+            case 'vaca': return ' te invitó a una vaca 🐄';
+            case 'system': return '';
+            default: return ' interactuó contigo';
+        }
+    };
+
+    const getNotificationIcon = (type) => {
+        switch (type) {
+            case 'friend_request': return '👋';
+            case 'friend_accepted': return '🤝';
+            case 'gift': return '🎁';
+            case 'vaca': return '🐄';
+            case 'like': return '❤️';
+            case 'comment_reply': return '💬';
+            case 'mention': return '@';
+            default: return '🔔';
+        }
+    };
+
     const handleNotificationClick = (notification) => {
         markAsRead([notification.id]);
         setIsOpen(false);
-        router.push(`/?post=${notification.post_id}`);
+        router.push(getNotificationRoute(notification));
     };
 
     if (!isLoggedIn) return null;
@@ -123,7 +164,7 @@ export default function NotificationBell() {
                                     No hay notificaciones
                                 </div>
                             ) : (
-                                notifications.slice(0, 10).map(notif => (
+                                notifications.slice(0, 15).map(notif => (
                                     <button
                                         key={notif.id}
                                         onClick={() => handleNotificationClick(notif)}
@@ -131,15 +172,17 @@ export default function NotificationBell() {
                                             }`}
                                     >
                                         <div className="flex items-start gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-black text-xs">
-                                                {notif.actor_name?.charAt(0).toUpperCase() || '?'}
-                                            </div>
+                                            {notif.actor_avatar ? (
+                                                <img src={notif.actor_avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                                            ) : (
+                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm">
+                                                    {getNotificationIcon(notif.type)}
+                                                </div>
+                                            )}
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-bold">
-                                                    <span className="text-blue-600 dark:text-blue-400">{notif.actor_name}</span>
-                                                    {notif.type === 'comment_reply' && ' respondió tu comentario'}
-                                                    {notif.type === 'mention' && ' te mencionó'}
-                                                    {notif.type === 'like' && ' le gustó tu post'}
+                                                <p className="text-sm">
+                                                    <span className="font-bold text-blue-600 dark:text-blue-400">{notif.actor_name}</span>
+                                                    <span className="text-zinc-700 dark:text-zinc-300">{getNotificationMessage(notif.type)}</span>
                                                 </p>
                                                 {notif.post_content && (
                                                     <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-1">
@@ -147,11 +190,11 @@ export default function NotificationBell() {
                                                     </p>
                                                 )}
                                                 <p className="text-[10px] text-zinc-400 mt-1 uppercase tracking-widest font-bold">
-                                                    {new Date(notif.created_at).toLocaleDateString('es', { month: 'short', day: 'numeric' })}
+                                                    {new Date(notif.created_at).toLocaleDateString('es', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                 </p>
                                             </div>
                                             {!notif.is_read && (
-                                                <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                                                <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-2" />
                                             )}
                                         </div>
                                     </button>

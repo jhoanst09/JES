@@ -18,11 +18,11 @@ export async function GET(request) {
         const notifications = await db.queryAll(
             `SELECT 
                 n.*,
-                p.name as actor_name,
-                p.avatar_url as actor_avatar,
+                u.name as actor_name,
+                u.avatar_url as actor_avatar,
                 sp.content as post_content
              FROM notifications n
-             JOIN profiles p ON n.actor_id = p.id
+             JOIN users u ON n.actor_id = u.id
              LEFT JOIN social_posts sp ON n.post_id = sp.id
              WHERE n.user_id = $1
              ORDER BY n.created_at DESC
