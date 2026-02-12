@@ -17,11 +17,17 @@ export async function GET(request) {
         const conversations = await db.queryAll(
             `SELECT c.*, 
                     cp.role AS my_role,
+                    b.goal_amount,
+                    b.product_handle,
+                    b.product_title,
+                    b.product_image,
+                    COALESCE((SELECT SUM(amount) FROM gifts WHERE bag_id = b.id AND payment_status = 'paid'), 0) AS current_amount,
                     (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message,
                     (SELECT sender_id FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_sender,
                     (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id AND sender_id != $1 AND is_read = false) AS unread_count
              FROM conversations c
              JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = $1
+             LEFT JOIN bags b ON b.id = c.bag_id
              ORDER BY c.last_message_at DESC
              LIMIT 50`,
             [userId]

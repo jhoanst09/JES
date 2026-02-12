@@ -23,6 +23,8 @@ function ChatContent() {
     const [view, setView] = useState('list');
     const [activeChat, setActiveChat] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [conversations, setConversations] = useState([]);
+    const [convsLoading, setConvsLoading] = useState(false);
 
     const currentUserId = user?.id;
 
@@ -58,6 +60,17 @@ function ChatContent() {
             }
         }
     }, [initialUserId, friends, activeChat]);
+
+    // Fetch group/vaca conversations
+    useEffect(() => {
+        if (!currentUserId) return;
+        setConvsLoading(true);
+        fetch(`/api/conversations?userId=${currentUserId}`)
+            .then(res => res.ok ? res.json() : { conversations: [] })
+            .then(data => setConversations((data.conversations || []).filter(c => c.type !== 'direct')))
+            .catch(() => setConversations([]))
+            .finally(() => setConvsLoading(false));
+    }, [currentUserId]);
 
     // Handle file upload for ChatInput component (background upload)
     const handleFileUpload = useCallback(async (file, type) => {
@@ -133,6 +146,65 @@ function ChatContent() {
                 />
             </div>
             <div className="flex-1 overflow-y-auto">
+                {/* VACA / GROUP CONVERSATIONS SECTION */}
+                {conversations.length > 0 && (
+                    <div className="border-b border-zinc-800">
+                        <p className="px-4 pt-3 pb-1 text-[10px] uppercase tracking-wider text-zinc-500 font-bold">🐄 Vacas & Grupos</p>
+                        {conversations.map(conv => {
+                            const bag = conv.bag_id ? conv : null;
+                            const progress = bag ? Math.min(100, Math.round((parseFloat(conv.current_amount || 0) / Math.max(parseFloat(conv.goal_amount || 1), 1)) * 100)) : null;
+                            return (
+                                <motion.div
+                                    key={conv.id}
+                                    whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                                    onClick={() => {
+                                        setActiveChat({
+                                            id: conv.id,
+                                            name: conv.name || 'Grupo',
+                                            image_url: conv.image_url,
+                                            avatar_url: conv.image_url,
+                                            isGroup: true,
+                                            type: conv.type,
+                                            bag_id: conv.bag_id,
+                                            participants: conv.participants,
+                                            current_amount: conv.current_amount,
+                                            goal_amount: conv.goal_amount,
+                                        });
+                                        setView('chat');
+                                    }}
+                                    className={`flex items-center gap-3 p-4 cursor-pointer border-l-4 transition-all ${activeChat?.id === conv.id ? 'border-amber-500 bg-zinc-800/50' : 'border-transparent'}`}
+                                >
+                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-green-500 flex items-center justify-center text-xl flex-shrink-0">
+                                        {conv.type === 'vaca' ? '🐄' : '👥'}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <span className="font-bold text-white text-sm truncate block">{conv.name || 'Grupo'}</span>
+                                        {progress !== null && (
+                                            <div className="mt-1">
+                                                <div className="w-full h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-gradient-to-r from-amber-500 to-green-500 rounded-full transition-all"
+                                                        style={{ width: `${progress}%` }}
+                                                    />
+                                                </div>
+                                                <p className="text-[10px] text-zinc-500 mt-0.5">{progress}% recolectado</p>
+                                            </div>
+                                        )}
+                                        {!progress && conv.last_message && (
+                                            <p className="text-xs text-zinc-400 truncate">{conv.last_message}</p>
+                                        )}
+                                    </div>
+                                    {conv.unread_count > 0 && (
+                                        <span className="w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center text-[10px] text-white font-bold">
+                                            {conv.unread_count}
+                                        </span>
+                                    )}
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                )}
+                {/* DIRECT FRIENDS LIST */}
                 {friendsLoading ? (
                     <div className="p-4">
                         <FriendSkeleton count={5} />
@@ -254,12 +326,36 @@ function ChatContent() {
                         )}
                     </div>
                     <div>
-                        <h3 className="font-black text-white uppercase">@{activeChat.name}</h3>
-                        <p className={`text-xs ${isPartnerTyping ? 'text-blue-400' : partnerOnline ? 'text-green-400' : 'text-zinc-500'}`}>
-                            {isPartnerTyping ? 'Escribiendo...' : partnerOnline ? 'EN LÍNEA' : 'DESCONECTADO'}
-                        </p>
+                        <h3 className="font-black text-white uppercase">{activeChat.isGroup ? activeChat.name : `@${activeChat.name}`}</h3>
+                        {activeChat.isGroup ? (
+                            <p className="text-xs text-zinc-500">{activeChat.participants?.length || 0} participantes</p>
+                        ) : (
+                            <p className={`text-xs ${isPartnerTyping ? 'text-blue-400' : partnerOnline ? 'text-green-400' : 'text-zinc-500'}`}>
+                                {isPartnerTyping ? 'Escribiendo...' : partnerOnline ? 'EN LÍNEA' : 'DESCONECTADO'}
+                            </p>
+                        )}
                     </div>
                 </div>
+
+                {/* Vaca progress bar in header */}
+                {activeChat.type === 'vaca' && activeChat.goal_amount && (
+                    <div className="px-4 py-2 border-b border-zinc-800 bg-zinc-900/50">
+                        <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-zinc-400">🐄 Progreso de la Vaca</span>
+                            <span className="text-amber-400 font-bold">
+                                {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(activeChat.current_amount || 0)}
+                                {' / '}
+                                {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(activeChat.goal_amount)}
+                            </span>
+                        </div>
+                        <div className="w-full h-2 bg-zinc-700 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-gradient-to-r from-amber-500 to-green-500 rounded-full transition-all"
+                                style={{ width: `${Math.min(100, Math.round((parseFloat(activeChat.current_amount || 0) / Math.max(parseFloat(activeChat.goal_amount || 1), 1)) * 100))}%` }}
+                            />
+                        </div>
+                    </div>
+                )}
 
                 {/* Messages */}
                 <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -291,13 +387,24 @@ function ChatContent() {
                                             ? 'bg-white text-black rounded-br-md'
                                             : 'bg-zinc-800 text-white rounded-bl-md'
                                         }`}>
-                                        {msg.content_type === 'image' && msg.file_url && (
-                                            <img src={msg.file_url} alt="Imagen" className="max-w-full rounded-lg mb-2" />
+                                        {/* Show sender name in group chats */}
+                                        {!isMe && activeChat?.isGroup && msg.sender_name && (
+                                            <p className="text-[10px] text-amber-400 font-bold mb-0.5">{msg.sender_name}</p>
                                         )}
-                                        {msg.content_type === 'video' && msg.file_url && (
-                                            <video src={msg.file_url} controls className="max-w-full rounded-lg mb-2" />
+                                        {/* System messages */}
+                                        {msg.content_type === 'system' ? (
+                                            <p className="text-xs text-zinc-400 italic text-center">{msg.content}</p>
+                                        ) : (
+                                            <>
+                                                {msg.content_type === 'image' && msg.file_url && (
+                                                    <img src={msg.file_url} alt="Imagen" className="max-w-full rounded-lg mb-2" />
+                                                )}
+                                                {msg.content_type === 'video' && msg.file_url && (
+                                                    <video src={msg.file_url} controls className="max-w-full rounded-lg mb-2" />
+                                                )}
+                                                <p className="text-sm">{msg.content}</p>
+                                            </>
                                         )}
-                                        <p className="text-sm">{msg.content}</p>
                                         <div className="flex items-center gap-2 mt-1">
                                             <p className={`text-[10px] ${isFailed ? 'text-red-400' : isMe ? 'text-black/50' : 'text-zinc-500'}`}>
                                                 {isFailed ? '❌ Error al enviar' : isPending ? '⏳ Enviando...' : new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

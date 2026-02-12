@@ -1,9 +1,10 @@
 'use client';
-import { useState, useCallback, useRef, useEffect, memo } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useWishlist } from '@/src/context/WishlistContext';
 import { useCart } from '@/src/context/CartContext';
+import GiftModal from './GiftModal';
 
 /**
  * ProductCard - Clean Minimal Design
@@ -30,8 +31,7 @@ const ProductCard = memo(function ProductCard({
     const [imageLoaded, setImageLoaded] = useState(false);
     const [showActions, setShowActions] = useState(false);
     const [addedToCart, setAddedToCart] = useState(false);
-    const [showGiftMenu, setShowGiftMenu] = useState(false);
-    const giftMenuRef = useRef(null);
+    const [showGiftModal, setShowGiftModal] = useState(false);
 
     // Normalize data - accept both legacy props and product object
     const title = nombre || product?.title || 'Producto';
@@ -53,17 +53,12 @@ const ProductCard = memo(function ProductCard({
         priceRange: { minVariantPrice: { amount: priceValue, currencyCode: currency } }
     };
 
-    // Close gift menu on outside click
-    useEffect(() => {
-        if (!showGiftMenu) return;
-        const handleClick = (e) => {
-            if (giftMenuRef.current && !giftMenuRef.current.contains(e.target)) {
-                setShowGiftMenu(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
-    }, [showGiftMenu]);
+    // Open gift modal
+    const handleOpenGiftModal = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowGiftModal(true);
+    }, []);
 
     const formatPrice = (amount) => {
         if (typeof amount === 'string' && amount.includes('$')) return amount;
@@ -94,12 +89,7 @@ const ProductCard = memo(function ProductCard({
         window.location.href = '/checkout';
     }, [productData, available, addToCart]);
 
-    const handleSocialCommerce = useCallback((e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setShowGiftMenu(false);
-        onBagCreate?.(productData);
-    }, [productData, onBagCreate]);
+
 
     const handleWishlist = useCallback((e) => {
         e.preventDefault();
@@ -210,47 +200,20 @@ const ProductCard = memo(function ProductCard({
                     Comprar Ahora
                 </button>
 
-                {/* Gift / Regalar — dropdown */}
-                <div className="relative" ref={giftMenuRef}>
-                    <button
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowGiftMenu(!showGiftMenu); }}
-                        className="px-4 py-3 bg-transparent border border-white/20 text-white rounded-xl font-medium hover:bg-white/5 hover:border-white/30 active:scale-[0.98] transition-all text-sm"
-                    >
-                        🎁 Regalar
-                    </button>
-
-                    <AnimatePresence>
-                        {showGiftMenu && (
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.9, y: -5 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.9, y: -5 }}
-                                transition={{ duration: 0.15 }}
-                                className="absolute bottom-full right-0 mb-2 w-48 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
-                            >
-                                <button
-                                    onClick={handleSocialCommerce}
-                                    className="w-full text-left px-4 py-3 text-white text-sm hover:bg-white/10 transition-colors flex items-center gap-2"
-                                >
-                                    🐄 Hacer Vaca
-                                </button>
-                                <button
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setShowGiftMenu(false);
-                                        // Copy share link
-                                        navigator.clipboard?.writeText(`${window.location.origin}/product/${productHandle}`);
-                                    }}
-                                    className="w-full text-left px-4 py-3 text-white text-sm hover:bg-white/10 transition-colors flex items-center gap-2 border-t border-white/5"
-                                >
-                                    🔗 Compartir
-                                </button>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
+                {/* Gift / Regalar — opens modal */}
+                <button
+                    onClick={handleOpenGiftModal}
+                    className="px-4 py-3 bg-transparent border border-white/20 text-white rounded-xl font-medium hover:bg-white/5 hover:border-amber-500/40 active:scale-[0.98] transition-all text-sm"
+                >
+                    🎁 Regalar
+                </button>
             </div>
+            {/* Gift Modal */}
+            <GiftModal
+                isOpen={showGiftModal}
+                onClose={() => setShowGiftModal(false)}
+                product={productData}
+            />
         </motion.div>
     );
 });
