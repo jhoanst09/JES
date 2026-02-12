@@ -191,9 +191,11 @@ export function CartProvider({ children }) {
                 })
             );
 
-            const checkoutUrl = await createShopifyCheckout(itemsWithVariants);
-            if (checkoutUrl) {
-                window.location.href = checkoutUrl;
+            const result = await createShopifyCheckout(itemsWithVariants);
+            if (result?.checkoutUrl) {
+                window.location.href = result.checkoutUrl;
+            } else {
+                showToast('No se pudo crear el checkout. Intenta de nuevo.', 'error');
             }
         } catch (error) {
             console.error('Checkout error:', error);
