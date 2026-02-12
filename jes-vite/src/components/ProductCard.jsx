@@ -27,7 +27,7 @@ const ProductCard = memo(function ProductCard({
     onBagCreate
 }) {
     const { toggleWishlist, wishlist } = useWishlist() || {};
-    const { addToCart } = useCart() || {};
+    const { addToCart, startCheckout, isCheckingOut } = useCart() || {};
     const [imageLoaded, setImageLoaded] = useState(false);
     const [showActions, setShowActions] = useState(false);
     const [addedToCart, setAddedToCart] = useState(false);
@@ -80,14 +80,14 @@ const ProductCard = memo(function ProductCard({
         setTimeout(() => setAddedToCart(false), 2000);
     }, [productData, available, addToCart]);
 
-    const handleBuyNow = useCallback((e) => {
+    const handleBuyNow = useCallback(async (e) => {
         e.preventDefault();
         e.stopPropagation();
         if (!available) return;
 
-        addToCart?.(productData);
-        window.location.href = '/checkout';
-    }, [productData, available, addToCart]);
+        await addToCart?.(productData);
+        startCheckout?.();
+    }, [productData, available, addToCart, startCheckout]);
 
 
 

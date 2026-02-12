@@ -11,8 +11,6 @@ import MobileTabBar from '@/src/components/MobileTabBar';
 import { useWishlist } from '@/src/context/WishlistContext';
 import { useCart } from '@/src/context/CartContext';
 import VirtualMirror from '@/src/components/VirtualMirror';
-import PurchaseTerminal from '@/src/components/PurchaseTerminal';
-import { useTerminal } from '@/src/context/TerminalContext';
 import DOMPurify from 'dompurify';
 
 export default function ProductDetailsPage({ params }) {
@@ -23,10 +21,9 @@ export default function ProductDetailsPage({ params }) {
     const [selectedImage, setSelectedImage] = useState(0);
     const [wantsPrivate, setWantsPrivate] = useState(false);
     const [showMirror, setShowMirror] = useState(false);
-    const { openTerminal } = useTerminal();
     const [relatedProducts, setRelatedProducts] = useState([]);
     const { toggleWishlist, isInWishlist, addToWishlist, isLoggedIn } = useWishlist();
-    const { addToCart } = useCart();
+    const { addToCart, startCheckout, isCheckingOut } = useCart();
 
     useEffect(() => {
         async function fetchProduct() {
@@ -178,10 +175,19 @@ export default function ProductDetailsPage({ params }) {
                             )}
 
                             <button
-                                onClick={() => openTerminal(product)}
-                                className="w-full py-5 bg-zinc-900 dark:bg-zinc-800 text-white font-black rounded-full border border-black/10 dark:border-white/10 hover:bg-black dark:hover:bg-zinc-700 transition-all text-sm uppercase tracking-widest shadow-xl"
+                                onClick={async () => {
+                                    await addToCart({
+                                        handle: product.handle,
+                                        title: product.title,
+                                        price: product.price,
+                                        image: product.image || product.images[0]
+                                    });
+                                    startCheckout();
+                                }}
+                                disabled={isCheckingOut}
+                                className="w-full py-5 bg-zinc-900 dark:bg-zinc-800 text-white font-black rounded-full border border-black/10 dark:border-white/10 hover:bg-black dark:hover:bg-zinc-700 transition-all text-sm uppercase tracking-widest shadow-xl disabled:opacity-50"
                             >
-                                Comprar Ahora
+                                {isCheckingOut ? 'Procesando...' : 'Comprar Ahora'}
                             </button>
 
                             <div className="pt-4 flex flex-col gap-4">
