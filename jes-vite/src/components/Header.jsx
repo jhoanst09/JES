@@ -10,7 +10,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useTerminal } from '../context/TerminalContext';
 import { useWishlist } from '../context/WishlistContext';
 import CartDrawer from './CartDrawer';
-import NotificationBell from './NotificationBell';
+import ProfileButton from './ProfileButton';
 // import { signOut } from '@/app/auth/actions'; // Replaced by context logout
 import SearchModal from './SearchModal';
 
@@ -76,22 +76,9 @@ export default function Header() {
 
                             {/* Right side utilities */}
                             <div className="flex items-center gap-2 shrink-0">
-                                <Link
-                                    href="/profile"
-                                    className="hidden md:flex p-2.5 text-zinc-600 dark:text-white/80 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-all relative active:scale-95"
-                                    aria-label="Perfil"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-                                    {followRequests.length > 0 && (
-                                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center text-[10px] font-black text-white px-1 shadow-lg shadow-red-500/40 animate-pulse">
-                                            {followRequests.length}
-                                        </span>
-                                    )}
-                                </Link>
+                                <ProfileButton />
 
                                 <ThemeToggle className="text-zinc-600 dark:text-white/80 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10" />
-
-                                <NotificationBell />
 
                                 <button
                                     onClick={() => setSearchOpen(true)}

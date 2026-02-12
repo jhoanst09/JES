@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useWishlist } from '../context/WishlistContext';
+import Link from 'next/link';
 
 /**
  * SocialFeed - Clean AWS Architecture
@@ -231,7 +232,7 @@ const CommentSection = ({ postId, currentUserId, authorName }) => {
 // POST CARD COMPONENT
 // ==========================================
 const PostCard = memo(({ post, currentUserId, onLike, onDelete, friendIds, sentRequestIds, onSendFriendRequest }) => {
-    const [likes, setLikes] = useState(post.likes_count || 0);
+    const [likes, setLikes] = useState(parseInt(post.likes_count) || 0);
     const [liked, setLiked] = useState(false);
     const [showComments, setShowComments] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
@@ -263,55 +264,34 @@ const PostCard = memo(({ post, currentUserId, onLike, onDelete, friendIds, sentR
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-white font-bold overflow-hidden border border-black/5 dark:border-white/10 shrink-0 shadow-inner">
-                        {post.author_avatar ? (
-                            <img
-                                src={post.author_avatar}
-                                alt=""
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    e.target.parentElement.innerHTML = post.author_name?.[0]?.toUpperCase() || 'U';
-                                }}
-                            />
-                        ) : (
-                            <span className="text-zinc-400 select-none text-xl">
-                                {post.author_name?.[0]?.toUpperCase() || 'U'}
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div>
+                    <Link href={isAuthor ? '/profile' : `/user/${post.user_id}`} className="shrink-0">
+                        <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-white font-bold overflow-hidden border border-black/5 dark:border-white/10 shrink-0 shadow-inner hover:scale-105 transition-transform cursor-pointer">
+                            {post.author_avatar ? (
+                                <img
+                                    src={post.author_avatar}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.parentElement.innerHTML = post.author_name?.[0]?.toUpperCase() || 'U';
+                                    }}
+                                />
+                            ) : (
+                                <span className="text-zinc-400 select-none text-xl">
+                                    {post.author_name?.[0]?.toUpperCase() || 'U'}
+                                </span>
+                            )}
+                        </div>
+                    </Link>
+                    <div>
+                        <Link href={isAuthor ? '/profile' : `/user/${post.user_id}`} className="hover:underline">
                             <p className="font-black text-zinc-900 dark:text-white leading-tight tracking-tight">
                                 {post.author_name || 'Usuario'}
                             </p>
-                            <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mt-0.5">
-                                {new Date(post.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-                            </p>
-                        </div>
-                        {!isAuthor && currentUserId && friendStatus === 'none' && (
-                            <button
-                                onClick={async () => {
-                                    setLocalSent(true);
-                                    if (onSendFriendRequest) {
-                                        await onSendFriendRequest(post.user_id);
-                                    }
-                                }}
-                                className="px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-amber-500 text-white rounded-full hover:bg-amber-600 hover:scale-105 active:scale-95 transition-all shadow-md"
-                            >
-                                Añadir 🤝
-                            </button>
-                        )}
-                        {!isAuthor && friendStatus === 'pending' && (
-                            <span className="px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-zinc-200 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 rounded-full">
-                                Pendiente ⏳
-                            </span>
-                        )}
-                        {!isAuthor && friendStatus === 'friend' && (
-                            <span className="px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full">
-                                Amigos ✅
-                            </span>
-                        )}
+                        </Link>
+                        <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest mt-0.5">
+                            {new Date(post.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                        </p>
                     </div>
                 </div>
 
