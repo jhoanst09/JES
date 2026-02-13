@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { generateUploadUrl } from '@/src/utils/s3.server';
-import { ALLOWED_IMAGE_TYPES, ALLOWED_VIDEO_TYPES } from '@/src/utils/s3';
 
 /**
  * POST /api/upload
  * 
  * Get presigned S3 upload URL.
+ * Accepts any file type for general uploads.
  */
 export async function POST(request) {
     try {
@@ -18,9 +18,10 @@ export async function POST(request) {
             );
         }
 
-        // Validate file type
-        const allowedTypes = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYPES];
-        if (!allowedTypes.includes(contentType)) {
+        // Max file size validation happens client-side
+        // Allow all common file types
+        const blockedTypes = ['application/x-msdownload', 'application/x-executable'];
+        if (blockedTypes.includes(contentType)) {
             return NextResponse.json(
                 { error: 'File type not allowed' },
                 { status: 400 }

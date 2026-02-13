@@ -23,7 +23,7 @@ export async function GET(request) {
 
         // Get fresh user data from DB
         const user = await db.queryOne(
-            'SELECT id, email, name, avatar_url, bio, created_at FROM profiles WHERE id = $1',
+            'SELECT id, email, name, username, avatar_url, bio, created_at FROM profiles WHERE id = $1',
             [decoded.userId]
         );
 

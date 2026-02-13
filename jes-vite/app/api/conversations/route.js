@@ -14,20 +14,15 @@ export async function GET(request) {
             return NextResponse.json({ error: 'userId required' }, { status: 400 });
         }
 
+        // Simplified query that doesn't depend on bags/gifts tables existing
         const conversations = await db.queryAll(
             `SELECT c.*, 
                     cp.role AS my_role,
-                    b.goal_amount,
-                    b.product_handle,
-                    b.product_title,
-                    b.product_image,
-                    COALESCE((SELECT SUM(amount) FROM gifts WHERE bag_id = b.id AND payment_status = 'paid'), 0) AS current_amount,
                     (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message,
                     (SELECT sender_id FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_sender,
-                    (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id AND sender_id != $1 AND is_read = false) AS unread_count
+                    (SELECT COUNT(*)::int FROM messages WHERE conversation_id = c.id AND sender_id != $1 AND is_read = false) AS unread_count
              FROM conversations c
              JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = $1
-             LEFT JOIN bags b ON b.id = c.bag_id
              ORDER BY c.last_message_at DESC
              LIMIT 50`,
             [userId]
@@ -36,13 +31,31 @@ export async function GET(request) {
         // Get participants for each conversation
         for (const conv of conversations) {
             const participants = await db.queryAll(
-                `SELECT cp.user_id, cp.role, u.name, u.avatar_url, u.username
+                `SELECT cp.user_id, cp.role, p.name, p.avatar_url, p.username
                  FROM conversation_participants cp
-                 JOIN users u ON u.id = cp.user_id
+                 JOIN profiles p ON p.id = cp.user_id
                  WHERE cp.conversation_id = $1`,
                 [conv.id]
             );
             conv.participants = participants;
+
+            // If it's a vaca type, try to get bag info
+            if (conv.type === 'vaca' && conv.bag_id) {
+                try {
+                    const bag = await db.queryOne(
+                        `SELECT goal_amount, product_handle, product_title, product_image,
+                                COALESCE((SELECT SUM(amount) FROM gifts WHERE bag_id = bags.id AND payment_status = 'paid'), 0) AS current_amount
+                         FROM bags WHERE id = $1`,
+                        [conv.bag_id]
+                    );
+                    if (bag) {
+                        conv.bag = bag;
+                    }
+                } catch (e) {
+                    // Bags table might not exist or have different schema - skip
+                    console.warn('Could not fetch bag info:', e.message);
+                }
+            }
         }
 
         return NextResponse.json({ conversations });
@@ -83,8 +96,8 @@ export async function POST(request) {
         const result = await db.transaction(async (client) => {
             // Create conversation
             const conv = await client.query(
-                `INSERT INTO conversations (type, name, image_url, bag_id, created_by)
-                 VALUES ($1, $2, $3, $4, $5)
+                `INSERT INTO conversations (type, name, image_url, bag_id, created_by, last_message_at)
+                 VALUES ($1, $2, $3, $4, $5, NOW())
                  RETURNING *`,
                 [type, name || null, imageUrl || null, bagId || null, createdBy]
             );

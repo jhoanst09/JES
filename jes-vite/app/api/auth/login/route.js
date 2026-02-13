@@ -23,7 +23,7 @@ export async function POST(request) {
 
         // Find user
         const user = await db.queryOne(
-            'SELECT id, email, name, password_hash, avatar_url FROM profiles WHERE email = $1',
+            'SELECT id, email, name, username, password_hash, avatar_url FROM profiles WHERE email = $1',
             [email.toLowerCase()]
         );
 
@@ -68,6 +68,7 @@ export async function POST(request) {
                 id: user.id,
                 email: user.email,
                 name: user.name,
+                username: user.username,
                 avatar_url: user.avatar_url,
             },
         });

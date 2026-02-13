@@ -14,7 +14,7 @@ import MobileTabBar from '@/src/components/MobileTabBar';
 
 export default function ProfilePage() {
     const router = useRouter();
-    const { wishlist, userProfile, isLoggedIn, loading, socialLoading, login, signUp, loginWithGoogle, resetPassword, logout, togglePrivacy, updateProfile, toggleFollow, following, followRequests, sentFollowRequests, acceptFollowRequest, rejectFollowRequest, orders, toggleWishlist } = useWishlist();
+    const { wishlist, userProfile, isLoggedIn, loading, socialLoading, login, signUp, loginWithGoogle, resetPassword, logout, togglePrivacy, updateProfile, refreshProfile, toggleFollow, following, friends, followRequests, sentFollowRequests, acceptFriendRequest, rejectFriendRequest, orders, toggleWishlist } = useWishlist();
 
     // ⏳ Loading skeleton - prevents SSR session read issues
     if (loading) {
@@ -51,6 +51,8 @@ export default function ProfilePage() {
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [regUsername, setRegUsername] = useState('');
+    const [usernameAvailable, setUsernameAvailable] = useState(null);
     const [authError, setAuthError] = useState(null);
     const [isLoginMode, setIsLoginMode] = useState(true);
     const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
@@ -148,14 +150,12 @@ export default function ProfilePage() {
             } else if (isLoginMode) {
                 await login({ email, password });
             } else {
-                const res = await signUp({ email, password });
-                if (res?.needsConfirmation) {
-                    setAuthError('¡Chevere! Cuenta creada. Revisa tu correo para confirmar.');
-                } else {
-                    setAuthError('¡Chevere! Cuenta creada. Ahora inicia sesión.');
-                    setIsLoginMode(true);
-                    setPassword('');
+                // Register mode: require username
+                if (!regUsername || !/^[a-zA-Z0-9._]{3,30}$/.test(regUsername)) {
+                    setAuthError('El &username debe tener 3-30 caracteres (letras, números, puntos, guion bajo)');
+                    return;
                 }
+                await signUp({ email, password, username: regUsername });
             }
         } catch (err) {
             setAuthError(err.message || 'Error en el proceso. Revisa tus datos, vale.');
@@ -231,6 +231,38 @@ export default function ProfilePage() {
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" /><circle cx="12" cy="12" r="3" /></svg>
                                             )}
                                         </button>
+                                    </div>
+                                )}
+                                {!isLoginMode && !forgotPasswordMode && (
+                                    <div className="relative group mt-2">
+                                        <div className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-400 font-black text-lg">&</div>
+                                        <input
+                                            id="username"
+                                            name="username"
+                                            type="text"
+                                            placeholder="tu_username"
+                                            value={regUsername}
+                                            onChange={async (e) => {
+                                                const val = e.target.value.replace(/\s/g, '').toLowerCase();
+                                                setRegUsername(val);
+                                                if (val.length >= 3) {
+                                                    try {
+                                                        const res = await fetch(`/api/users/check-username?username=${val}`);
+                                                        const data = await res.json();
+                                                        setUsernameAvailable(data.available);
+                                                    } catch { setUsernameAvailable(null); }
+                                                } else {
+                                                    setUsernameAvailable(null);
+                                                }
+                                            }}
+                                            className="w-full bg-zinc-100 dark:bg-zinc-900 border border-black/5 dark:border-white/5 rounded-3xl p-6 pl-12 outline-none focus:border-blue-500 transition-all font-medium text-lg placeholder:text-zinc-400 dark:placeholder:text-zinc-700 text-black dark:text-white"
+                                            autoComplete="username"
+                                        />
+                                        {regUsername.length >= 3 && usernameAvailable !== null && (
+                                            <span className={`absolute right-6 top-1/2 -translate-y-1/2 text-sm font-black ${usernameAvailable ? 'text-green-500' : 'text-red-500'}`}>
+                                                {usernameAvailable ? '✓ Disponible' : '✕ En uso'}
+                                            </span>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -326,6 +358,74 @@ export default function ProfilePage() {
             <Header />
 
             <main className="max-w-[1200px] mx-auto px-6 pt-32 pb-24">
+
+                {/* Username Setup Banner for existing users */}
+                {isLoggedIn && !userProfile?.username && (
+                    <motion.section
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-8 bg-gradient-to-r from-blue-600/10 to-purple-600/10 border border-blue-500/30 rounded-[32px] p-6 md:p-8"
+                    >
+                        <h3 className="text-lg font-black text-white mb-2">¡Crea tu &username!</h3>
+                        <p className="text-zinc-400 text-sm mb-4">Elige un nombre de usuario único para que tus amigos te encuentren.</p>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <div className="relative flex-1">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 font-black text-lg">&</div>
+                                <input
+                                    type="text"
+                                    placeholder="tu_username"
+                                    value={regUsername}
+                                    onChange={async (e) => {
+                                        const val = e.target.value.replace(/\s/g, '').toLowerCase();
+                                        setRegUsername(val);
+                                        if (val.length >= 3 && /^[a-zA-Z0-9._]{3,30}$/.test(val)) {
+                                            try {
+                                                const res = await fetch(`/api/users/check-username?username=${val}`);
+                                                const data = await res.json();
+                                                setUsernameAvailable(data.available);
+                                            } catch { setUsernameAvailable(null); }
+                                        } else {
+                                            setUsernameAvailable(null);
+                                        }
+                                    }}
+                                    className="w-full pl-10 pr-4 py-3 bg-black/30 border border-white/10 rounded-2xl text-white font-bold focus:border-blue-500 outline-none"
+                                />
+                                {regUsername.length >= 3 && usernameAvailable !== null && (
+                                    <div className={`absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black ${usernameAvailable ? 'text-green-500' : 'text-red-500'}`}>
+                                        {usernameAvailable ? '✓ Disponible' : '✕ En uso'}
+                                    </div>
+                                )}
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    if (!regUsername || !/^[a-zA-Z0-9._]{3,30}$/.test(regUsername) || !usernameAvailable) return;
+                                    try {
+                                        const res = await fetch('/api/profile/set-username', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ userId: userProfile.id, username: regUsername }),
+                                        });
+                                        if (res.ok) {
+                                            await refreshProfile();
+                                            setRegUsername('');
+                                            setUsernameAvailable(null);
+                                            setAuthError(null);
+                                        } else {
+                                            const data = await res.json();
+                                            setAuthError(data.error || 'Error al guardar username');
+                                        }
+                                    } catch (err) { setAuthError('Error de conexión: ' + err.message); }
+                                }}
+                                disabled={!regUsername || !usernameAvailable}
+                                className="px-8 py-3 bg-blue-600 text-white font-black rounded-2xl uppercase tracking-widest text-xs hover:bg-blue-700 transition-all disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
+                            >
+                                Guardar
+                            </button>
+                        </div>
+                        {authError && <p className="text-red-500 text-xs font-bold mt-2">{authError}</p>}
+                    </motion.section>
+                )}
+
                 {/* Profile Header */}
                 <section className="mb-20">
                     <div className="flex flex-col md:flex-row items-center gap-10 bg-zinc-100 dark:bg-zinc-900/30 p-12 rounded-[56px] border border-black/5 dark:border-white/5 backdrop-blur-md relative overflow-hidden group transition-colors duration-300">
@@ -443,11 +543,11 @@ export default function ProfilePage() {
                                 </div>
                             )}
                             <div className="flex items-center justify-center md:justify-start gap-4">
-                                <p className="text-zinc-500 font-bold text-sm tracking-wide">{userProfile.email}</p>
-                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Verificado</span>
+                                <p className="text-zinc-500 font-bold text-sm tracking-wide">{userProfile.username ? `&${userProfile.username}` : ''}</p>
+                                {userProfile.username && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>}
+                                {userProfile.username && <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Verificado</span>}
                                 <span className="w-1.5 h-1.5 bg-zinc-800 rounded-full"></span>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Siguiendo {following?.length || 0}</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Amigos {friends?.length || 0}</span>
                             </div>
                         </div>
                     </div>
@@ -538,40 +638,40 @@ export default function ProfilePage() {
                                         </h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {(followRequests || []).map(req => (
-                                                <div key={req.id} className="bg-blue-600/10 dark:bg-blue-500/5 border border-blue-500/30 dark:border-blue-500/20 p-6 rounded-[32px] flex items-center gap-6 shadow-xl">
+                                                <div key={req.request_id || req.id} className="bg-blue-600/10 dark:bg-blue-500/5 border border-blue-500/30 dark:border-blue-500/20 p-6 rounded-[32px] flex items-center gap-6 shadow-xl">
                                                     <div
-                                                        onClick={() => router.push(`/wishlist?user=${req.sender_id}`)}
+                                                        onClick={() => router.push(`/user/${req.id}`)}
                                                         className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer group"
                                                     >
                                                         <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full overflow-hidden shrink-0 ring-2 ring-blue-500/20 group-hover:ring-blue-500 transition-all">
-                                                            {req.profiles?.avatar_url ? (
+                                                            {req.avatar_url ? (
                                                                 <img
-                                                                    src={req.profiles.avatar_url}
+                                                                    src={req.avatar_url}
                                                                     className="w-full h-full object-cover"
                                                                     alt=""
                                                                     onError={(e) => {
                                                                         e.target.style.display = 'none';
-                                                                        e.target.parentElement.innerHTML = req.profiles?.name?.[0]?.toUpperCase() || '👤';
+                                                                        e.target.parentElement.innerHTML = req.name?.[0]?.toUpperCase() || '👤';
                                                                     }}
                                                                 />
                                                             ) : (
-                                                                <div className="w-full h-full flex items-center justify-center text-xl">👤</div>
+                                                                <div className="w-full h-full flex items-center justify-center text-xl">{req.name?.[0]?.toUpperCase() || '👤'}</div>
                                                             )}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-black text-base truncate group-hover:text-blue-500 transition-colors">@{req.profiles?.name || 'Usuario'}</p>
-                                                            <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-widest">{req.profiles?.city || 'Quiere ser tu amigo'}</p>
+                                                            <p className="font-black text-base truncate group-hover:text-blue-500 transition-colors">{req.name || 'Usuario'}</p>
+                                                            <p className="text-[10px] text-zinc-500 font-bold">{req.username ? `&${req.username}` : 'Quiere ser tu amigo'}</p>
                                                         </div>
                                                     </div>
                                                     <div className="flex gap-2 shrink-0">
                                                         <button
-                                                            onClick={() => acceptFollowRequest(req.id, req.sender_id)}
+                                                            onClick={() => acceptFriendRequest(req.request_id)}
                                                             className="p-2 bg-blue-600 text-white rounded-xl hover:scale-110 active:scale-95 transition-all text-[10px] font-black uppercase px-4"
                                                         >
                                                             Aceptar
                                                         </button>
                                                         <button
-                                                            onClick={() => rejectFollowRequest(req.id)}
+                                                            onClick={() => rejectFriendRequest(req.request_id)}
                                                             className="p-2 bg-zinc-200 dark:bg-zinc-800 text-zinc-500 rounded-xl hover:text-red-500 transition-all"
                                                         >
                                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>

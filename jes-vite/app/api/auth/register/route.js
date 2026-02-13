@@ -7,11 +7,11 @@ import redis from '@/src/utils/redis-session';
 /**
  * POST /api/auth/register
  * 
- * Register a new user with email/password.
+ * Register a new user with email/password and unique &username.
  */
 export async function POST(request) {
     try {
-        const { email, password, name } = await request.json();
+        const { email, password, name, username } = await request.json();
 
         // Validation
         if (!email || !password) {
@@ -28,15 +28,36 @@ export async function POST(request) {
             );
         }
 
-        // Check if user exists
-        const existing = await db.queryOne(
+        // Username validation
+        if (!username || !/^[a-zA-Z0-9._]{3,30}$/.test(username)) {
+            return NextResponse.json(
+                { error: 'El &username debe tener 3-30 caracteres (letras, números, puntos, guion bajo)' },
+                { status: 400 }
+            );
+        }
+
+        // Check if email exists
+        const existingEmail = await db.queryOne(
             'SELECT id FROM profiles WHERE email = $1',
             [email.toLowerCase()]
         );
 
-        if (existing) {
+        if (existingEmail) {
             return NextResponse.json(
                 { error: 'Este correo ya está registrado' },
+                { status: 409 }
+            );
+        }
+
+        // Check if username exists
+        const existingUsername = await db.queryOne(
+            'SELECT id FROM profiles WHERE LOWER(username) = $1',
+            [username.toLowerCase()]
+        );
+
+        if (existingUsername) {
+            return NextResponse.json(
+                { error: 'Este &username ya está en uso' },
                 { status: 409 }
             );
         }
@@ -44,12 +65,12 @@ export async function POST(request) {
         // Hash password
         const passwordHash = await bcrypt.hash(password, 12);
 
-        // Create user
+        // Create user with username
         const user = await db.queryOne(
-            `INSERT INTO profiles (email, password_hash, name)
-             VALUES ($1, $2, $3)
-             RETURNING id, email, name, avatar_url, created_at`,
-            [email.toLowerCase(), passwordHash, name || email.split('@')[0]]
+            `INSERT INTO profiles (email, password_hash, name, username)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id, email, name, username, avatar_url, created_at`,
+            [email.toLowerCase(), passwordHash, name || email.split('@')[0], username.toLowerCase()]
         );
 
         // Generate JWT
@@ -63,6 +84,7 @@ export async function POST(request) {
             await redis.storeSession(user.id, {
                 email: user.email,
                 name: user.name,
+                username: user.username,
                 loginTime: Date.now(),
             });
         } catch (redisError) {
@@ -76,6 +98,7 @@ export async function POST(request) {
                 id: user.id,
                 email: user.email,
                 name: user.name,
+                username: user.username,
             },
         });
 
@@ -91,3 +114,4 @@ export async function POST(request) {
         );
     }
 }
+

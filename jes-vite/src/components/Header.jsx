@@ -75,10 +75,16 @@ export default function Header() {
                             </div>
 
                             {/* Right side utilities */}
-                            <div className="flex items-center gap-2 shrink-0">
-                                <ProfileButton />
+                            <div className="flex items-center gap-1 md:gap-2 shrink-0">
+                                {/* Profile - desktop only */}
+                                <div className="hidden md:block">
+                                    <ProfileButton />
+                                </div>
 
-                                <ThemeToggle className="text-zinc-600 dark:text-white/80 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10" />
+                                {/* Theme toggle - desktop only */}
+                                <div className="hidden md:block">
+                                    <ThemeToggle className="text-zinc-600 dark:text-white/80 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10" />
+                                </div>
 
                                 <button
                                     onClick={() => setSearchOpen(true)}
@@ -144,7 +150,7 @@ export default function Header() {
                             animate={{ x: 0 }}
                             exit={{ x: '100%' }}
                             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                            className="fixed right-0 top-0 bottom-0 w-[300px] z-[70] bg-white dark:bg-zinc-950 border-l border-black/5 dark:border-white/10 p-10 flex flex-col shadow-2xl"
+                            className="fixed right-0 top-0 bottom-0 w-[300px] z-[70] bg-white/70 dark:bg-black/60 backdrop-blur-2xl border-l border-white/20 dark:border-white/10 p-10 flex flex-col shadow-2xl"
                         >
                             <div className="flex justify-between items-center mb-12">
                                 <h3 className="text-xs font-black uppercase tracking-[0.4em] text-zinc-400 dark:text-zinc-500">JES STORE</h3>

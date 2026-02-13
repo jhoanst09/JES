@@ -83,8 +83,7 @@ const FileUploadButton = memo(function FileUploadButton({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     fileName: file.name,
-                    fileType: file.type,
-                    fileSize: file.size,
+                    contentType: file.type,
                     folder: 'chat-media'
                 })
             });
@@ -94,7 +93,8 @@ const FileUploadButton = memo(function FileUploadButton({
                 throw new Error(errData.error || 'Error obteniendo URL de subida');
             }
 
-            const { uploadUrl, fileUrl } = await presignRes.json();
+            const { uploadUrl, publicUrl } = await presignRes.json();
+            const fileUrl = publicUrl;
             setUploadProgress(20);
 
             // Step 2: Upload directly to S3 using presigned PUT URL

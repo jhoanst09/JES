@@ -17,7 +17,7 @@ export async function GET(request, { params }) {
         if (before) {
             query = `SELECT m.*, u.name AS sender_name, u.avatar_url AS sender_avatar
                      FROM messages m
-                     JOIN users u ON u.id = m.sender_id
+                     JOIN profiles u ON u.id = m.sender_id
                      WHERE m.conversation_id = $1
                        AND m.created_at < (SELECT created_at FROM messages WHERE id = $2)
                      ORDER BY m.created_at DESC
@@ -26,7 +26,7 @@ export async function GET(request, { params }) {
         } else {
             query = `SELECT m.*, u.name AS sender_name, u.avatar_url AS sender_avatar
                      FROM messages m
-                     JOIN users u ON u.id = m.sender_id
+                     JOIN profiles u ON u.id = m.sender_id
                      WHERE m.conversation_id = $1
                      ORDER BY m.created_at DESC
                      LIMIT $2`;
@@ -76,7 +76,7 @@ export async function POST(request, { params }) {
 
         // Get sender info
         const sender = await db.queryOne(
-            `SELECT name, avatar_url FROM users WHERE id = $1`,
+            `SELECT name, avatar_url FROM profiles WHERE id = $1`,
             [senderId]
         );
 

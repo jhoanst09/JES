@@ -85,10 +85,11 @@ const GiftModal = memo(function GiftModal({ isOpen, onClose, product }) {
         fetchData();
     }, [isOpen, user?.id]);
 
-    // Filter friends by search
+    // Filter friends by search (strip & prefix for username search)
+    const cleanQuery = searchQuery.startsWith('&') ? searchQuery.slice(1) : searchQuery;
     const filteredFriends = friends.filter(f =>
-        f.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        f.username?.toLowerCase().includes(searchQuery.toLowerCase())
+        f.name?.toLowerCase().includes(cleanQuery.toLowerCase()) ||
+        f.username?.toLowerCase().includes(cleanQuery.toLowerCase())
     );
 
     // Toggle participant for vaca
@@ -375,7 +376,7 @@ const GiftModal = memo(function GiftModal({ isOpen, onClose, product }) {
                                     {/* Search */}
                                     <input
                                         type="text"
-                                        placeholder="Buscar amigo..."
+                                        placeholder="Buscar amigo o &username..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 placeholder-zinc-500"
@@ -410,8 +411,8 @@ const GiftModal = memo(function GiftModal({ isOpen, onClose, product }) {
                                                         }
                                                     }}
                                                     className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${recipient?.id === friend.id
-                                                            ? 'bg-amber-500/20 border border-amber-500/50'
-                                                            : 'bg-white/5 border border-transparent hover:bg-white/10'
+                                                        ? 'bg-amber-500/20 border border-amber-500/50'
+                                                        : 'bg-white/5 border border-transparent hover:bg-white/10'
                                                         }`}
                                                 >
                                                     {friend.avatar_url ? (
@@ -423,7 +424,7 @@ const GiftModal = memo(function GiftModal({ isOpen, onClose, product }) {
                                                     )}
                                                     <div className="text-left">
                                                         <p className="text-white font-semibold text-sm">{friend.name}</p>
-                                                        {friend.username && <p className="text-zinc-500 text-xs">@{friend.username}</p>}
+                                                        {friend.username && <p className="text-zinc-500 text-xs">&{friend.username}</p>}
                                                     </div>
                                                 </button>
                                             ))
@@ -451,7 +452,7 @@ const GiftModal = memo(function GiftModal({ isOpen, onClose, product }) {
                                     {/* Search */}
                                     <input
                                         type="text"
-                                        placeholder="Buscar amigo..."
+                                        placeholder="Buscar amigo o &username..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 placeholder-zinc-500"
@@ -477,8 +478,8 @@ const GiftModal = memo(function GiftModal({ isOpen, onClose, product }) {
                                                         key={friend.id}
                                                         onClick={() => toggleParticipant(friend)}
                                                         className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${isSelected
-                                                                ? 'bg-green-500/20 border border-green-500/50'
-                                                                : 'bg-white/5 border border-transparent hover:bg-white/10'
+                                                            ? 'bg-green-500/20 border border-green-500/50'
+                                                            : 'bg-white/5 border border-transparent hover:bg-white/10'
                                                             }`}
                                                     >
                                                         {friend.avatar_url ? (

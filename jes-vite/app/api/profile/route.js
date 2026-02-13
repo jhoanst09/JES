@@ -15,7 +15,7 @@ export async function GET(request) {
         // 1. Single User Profile
         if (userId && !query) {
             const profile = await db.queryOne(
-                'SELECT id, email, name, avatar_url, bio, nationality, city FROM profiles WHERE id = $1',
+                'SELECT id, email, name, username, avatar_url, bio, nationality, city FROM profiles WHERE id = $1',
                 [userId]
             );
             return NextResponse.json({ profile: profile || null });
@@ -24,8 +24,8 @@ export async function GET(request) {
         // 2. Search Profiles by keyword
         if (query) {
             const profiles = await db.queryAll(
-                `SELECT id, name, avatar_url, city FROM profiles 
-                 WHERE (name ILIKE $1 OR email ILIKE $1)
+                `SELECT id, name, username, avatar_url, city FROM profiles 
+                 WHERE (name ILIKE $1 OR email ILIKE $1 OR username ILIKE $1)
                  ${excludeId ? 'AND id != $2' : ''}
                  LIMIT 20`,
                 excludeId ? [`%${query}%`, excludeId] : [`%${query}%`]
@@ -35,7 +35,7 @@ export async function GET(request) {
 
         // 3. User Discovery (all profiles except self)
         const profiles = await db.queryAll(
-            `SELECT id, name, avatar_url, city FROM profiles 
+            `SELECT id, name, username, avatar_url, city FROM profiles 
              ${excludeId ? 'WHERE id != $1' : ''}
              LIMIT 20`,
             excludeId ? [excludeId] : []
@@ -64,7 +64,7 @@ export async function PUT(request) {
                 city = COALESCE($6, city),
                 updated_at = NOW()
              WHERE id = $1
-             RETURNING id, email, name, avatar_url, bio`,
+             RETURNING id, email, name, username, avatar_url, bio`,
             [userId, name, bio, avatar_url, nationality, city]
         );
 

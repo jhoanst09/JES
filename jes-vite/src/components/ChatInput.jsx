@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, useRef, memo } from 'react';
 import FileUploadButton from './FileUploadButton';
 
 /**
@@ -21,19 +21,22 @@ const ChatInput = memo(function ChatInput({
     const [localInput, setLocalInput] = useState('');
     const [uploading, setUploading] = useState(false);
     const [pendingProduct, setPendingProduct] = useState(null);
+    const inputRef = useRef(null);
 
     const handleChange = useCallback((e) => {
         setLocalInput(e.target.value);
         onTyping?.();
     }, [onTyping]);
 
-    const handleSubmit = useCallback(async (e) => {
+    const handleSubmit = useCallback((e) => {
         e.preventDefault();
 
         // If there's a pending product, send it
         if (pendingProduct) {
-            await onSend?.(pendingProduct.url, 'product');
+            onSend?.(pendingProduct.url, 'product');
             setPendingProduct(null);
+            // Refocus input
+            setTimeout(() => inputRef.current?.focus(), 10);
             return;
         }
 
@@ -42,7 +45,9 @@ const ChatInput = memo(function ChatInput({
         if (!text) return;
 
         setLocalInput('');
-        await onSend?.(text);
+        onSend?.(text);
+        // Refocus input after clearing
+        setTimeout(() => inputRef.current?.focus(), 10);
     }, [localInput, pendingProduct, onSend]);
 
     const handleKeyDown = useCallback((e) => {
@@ -76,10 +81,10 @@ const ChatInput = memo(function ChatInput({
     }, []);
 
     return (
-        <div className="border-t border-zinc-800">
+        <div className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent">
             {/* Pending product preview */}
             {pendingProduct && (
-                <div className="p-3 bg-zinc-900/50 border-b border-zinc-800">
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800">
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-xs text-zinc-400">📦 Compartiendo producto:</span>
                         <button
@@ -89,14 +94,14 @@ const ChatInput = memo(function ChatInput({
                             ✕ Cancelar
                         </button>
                     </div>
-                    <div className="flex items-center gap-3 p-2 bg-zinc-800/50 rounded-lg">
+                    <div className="flex items-center gap-3 p-2 bg-zinc-100 dark:bg-zinc-800/50 rounded-lg">
                         <img
                             src={pendingProduct.product?.images?.edges?.[0]?.node?.url || '/placeholder.jpg'}
                             alt={pendingProduct.product?.title}
                             className="w-10 h-10 object-cover rounded"
                         />
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm text-white truncate">{pendingProduct.product?.title}</p>
+                            <p className="text-sm text-zinc-900 dark:text-white truncate">{pendingProduct.product?.title}</p>
                             <p className="text-xs text-green-400">
                                 ${pendingProduct.product?.priceRange?.minVariantPrice?.amount}
                             </p>
@@ -118,6 +123,7 @@ const ChatInput = memo(function ChatInput({
                 />
 
                 <input
+                    ref={inputRef}
                     type="text"
                     value={localInput}
                     onChange={handleChange}
@@ -129,13 +135,13 @@ const ChatInput = memo(function ChatInput({
                     }
                     disabled={disabled}
                     autoComplete="off"
-                    className="flex-1 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-full text-white text-sm focus:outline-none focus:border-white/50 disabled:opacity-50 transition-colors"
+                    className="flex-1 px-4 py-3 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full text-zinc-900 dark:text-white text-sm focus:outline-none focus:border-blue-500 dark:focus:border-white/50 disabled:opacity-50 transition-colors"
                 />
 
                 <button
                     type="submit"
                     disabled={(!localInput.trim() && !pendingProduct) || disabled}
-                    className="p-3 bg-white text-black rounded-full disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95 transition-transform"
+                    className="p-3 bg-blue-600 text-white rounded-full disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95 transition-transform"
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

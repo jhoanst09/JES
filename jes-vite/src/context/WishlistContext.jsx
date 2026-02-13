@@ -25,7 +25,7 @@ export function WishlistProvider({ children }) {
     const [sentFollowRequests, setSentFollowRequests] = useState([]);
     const [orders, setOrders] = useState([]);
 
-    const { user, isLoggedIn, loading: authLoading, signOut: authSignOut } = useAuth();
+    const { user, isLoggedIn, loading: authLoading, signOut: authSignOut, login: authLogin, register: authRegister } = useAuth();
     const { showToast } = useToast();
     const router = useRouter();
 
@@ -230,6 +230,21 @@ export function WishlistProvider({ children }) {
         }
     }, [fetchUserData, showToast]);
 
+    const rejectFriendRequest = useCallback(async (requestId) => {
+        try {
+            await fetch('/api/friends/reject', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requestId }),
+            });
+            showToast('Solicitud rechazada', 'info');
+            await fetchUserData();
+        } catch (error) {
+            console.error('Error rejecting friend request:', error);
+            showToast('Error al rechazar solicitud', 'error');
+        }
+    }, [fetchUserData, showToast]);
+
     const toggleFollow = useCallback(async (targetUserId) => {
         if (!user?.id) {
             showToast('Inicia sesión para añadir amigos', 'info');
@@ -277,6 +292,15 @@ export function WishlistProvider({ children }) {
         await authSignOut();
     }, [authSignOut]);
 
+    const signUp = useCallback(async ({ email, password, username }) => {
+        return await authRegister({ email, password, username });
+    }, [authRegister]);
+
+    const resetPassword = useCallback(async () => {
+        // Placeholder - not yet implemented with JWT auth
+        throw new Error('Funcionalidad no disponible aún. Contacta soporte.');
+    }, []);
+
     return (
         <WishlistContext.Provider value={{
             // State
@@ -305,7 +329,11 @@ export function WishlistProvider({ children }) {
             // Friends
             sendFriendRequest,
             acceptFriendRequest,
+            rejectFriendRequest,
             toggleFollow,
+            login: authLogin,
+            signUp,
+            resetPassword,
             logout,
         }}>
             {children}

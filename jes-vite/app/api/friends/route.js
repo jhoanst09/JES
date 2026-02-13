@@ -17,8 +17,8 @@ export async function GET(request) {
     try {
         // Get accepted friends (join on users table, not profiles)
         const friends = await db.queryAll(
-            `SELECT u.id, u.name, u.username, u.avatar_url, u.email
-             FROM users u
+            `SELECT DISTINCT u.id, u.name, u.username, u.avatar_url
+             FROM profiles u
              JOIN friendships f ON (f.friend_id = u.id OR f.user_id = u.id)
              WHERE (f.user_id = $1 OR f.friend_id = $1)
              AND f.status = 'accepted'
@@ -29,7 +29,7 @@ export async function GET(request) {
         // Get pending requests received (where current user is the recipient)
         const requestsReceived = await db.queryAll(
             `SELECT u.id, u.name, u.username, u.avatar_url, f.id as request_id
-             FROM users u
+             FROM profiles u
              JOIN friendships f ON f.user_id = u.id
              WHERE f.friend_id = $1 AND f.status = 'pending'`,
             [userId]

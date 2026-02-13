@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     name VARCHAR(255),           -- NULL for direct, set for groups
     image_url TEXT,              -- Group avatar
     bag_id UUID REFERENCES bags(id) ON DELETE SET NULL,  -- Link to vaca bag
-    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
     last_message_at TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -23,7 +23,7 @@ CREATE INDEX IF NOT EXISTS idx_conversations_last_msg ON conversations(last_mess
 CREATE TABLE IF NOT EXISTS conversation_participants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     role VARCHAR(20) DEFAULT 'member' CHECK (role IN ('creator', 'admin', 'member')),
     joined_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(conversation_id, user_id)
@@ -36,7 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_conv_participants_conv ON conversation_participan
 CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-    sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sender_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     content TEXT,
     content_type VARCHAR(20) DEFAULT 'text' CHECK (content_type IN ('text', 'image', 'video', 'file', 'system')),
     file_url TEXT,

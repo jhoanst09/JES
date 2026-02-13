@@ -9,8 +9,8 @@ export async function GET(request, { params }) {
         const { id } = await params;
 
         const user = await db.queryOne(
-            `SELECT id, name, username, avatar_url, created_at
-             FROM users WHERE id = $1`,
+            `SELECT id, name, username, avatar_url, bio, created_at
+             FROM profiles WHERE id = $1`,
             [id]
         );
 

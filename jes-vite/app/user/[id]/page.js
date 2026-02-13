@@ -97,7 +97,10 @@ export default function UserProfilePage({ params }) {
                             {profile.name}
                         </h1>
                         {profile.username && (
-                            <p className="text-sm text-zinc-500 font-medium">@{profile.username}</p>
+                            <p className="text-sm text-zinc-500 font-bold">&{profile.username}</p>
+                        )}
+                        {profile.bio && (
+                            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{profile.bio}</p>
                         )}
 
                         {/* Actions */}

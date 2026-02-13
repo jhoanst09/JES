@@ -82,12 +82,16 @@ export async function POST(request) {
                 [creatorId, recipientId, productHandle, productTitle || '', productImage || '', goalAmount, currency, bag.id, giftRef, message || null]
             );
 
-            // 4. Create group conversation
+            // 4. Get recipient name for the chat name
+            const recipient = await client.query('SELECT name FROM profiles WHERE id = $1', [recipientId]);
+            const recipientName = recipient.rows[0]?.name || 'tu amigo';
+
+            // 5. Create group conversation
             const convResult = await client.query(
-                `INSERT INTO conversations (type, name, image_url, bag_id, created_by)
-                 VALUES ('vaca', $1, $2, $3, $4)
+                `INSERT INTO conversations (type, name, image_url, bag_id, created_by, last_message_at)
+                 VALUES ('vaca', $1, $2, $3, $4, NOW())
                  RETURNING *`,
-                [`🐄 Vaca: ${productTitle}`, productImage || null, bag.id, creatorId]
+                [`🐄 Vaca para ${recipientName}`, productImage || null, bag.id, creatorId]
             );
             const conversation = convResult.rows[0];
 
@@ -110,11 +114,7 @@ export async function POST(request) {
                 `🐄 ¡Vaca creada! Juntemos ${new Intl.NumberFormat('es-CO', { style: 'currency', currency, minimumFractionDigits: 0 }).format(goalAmount)} para regalar "${productTitle}". Cada uno puede contribuir lo que quiera.`]
             );
 
-            // 7. Get recipient name for notification
-            const recipient = await client.query('SELECT name FROM users WHERE id = $1', [recipientId]);
-            const recipientName = recipient.rows[0]?.name || 'tu amigo';
-
-            // Send system message about recipient
+            // 8. Send system messages
             await client.query(
                 `INSERT INTO messages (conversation_id, sender_id, content, content_type)
                  VALUES ($1, $2, $3, 'system')`,

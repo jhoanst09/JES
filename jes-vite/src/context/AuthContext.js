@@ -88,13 +88,13 @@ export const AuthProvider = ({ children }) => {
     // ==========================================
     // REGISTER
     // ==========================================
-    const register = useCallback(async ({ email, password, name }) => {
+    const register = useCallback(async ({ email, password, name, username }) => {
         setLoading(true);
         try {
             const res = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, name }),
+                body: JSON.stringify({ email, password, name, username }),
             });
 
             const data = await res.json();
