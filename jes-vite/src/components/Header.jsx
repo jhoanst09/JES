@@ -13,6 +13,7 @@ import CartDrawer from './CartDrawer';
 import ProfileButton from './ProfileButton';
 // import { signOut } from '@/app/auth/actions'; // Replaced by context logout
 import SearchModal from './SearchModal';
+import NotificationBell from './NotificationBell';
 
 export default function Header() {
     const [searchOpen, setSearchOpen] = useState(false);
@@ -94,6 +95,11 @@ export default function Header() {
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
                                 </button>
 
+                                {/* Notification Bell */}
+                                <div className="hidden md:block">
+                                    <NotificationBell />
+                                </div>
+
                                 {/* Terminal Trigger - Visible on all devices */}
                                 <button
                                     onClick={() => openTerminal()}
@@ -165,6 +171,14 @@ export default function Header() {
                                     <div className="text-left">
                                         <p className="font-black text-zinc-900 dark:text-white uppercase tracking-tighter text-xl">Comunidad</p>
                                         <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-widest mt-1">Social y Juegos</p>
+                                    </div>
+                                </Link>
+
+                                <Link href="/marketplace" onClick={() => setIsMenuOpen(false)} className="group flex items-center gap-4">
+                                    <span className="text-2xl group-hover:scale-125 transition-transform">🏪</span>
+                                    <div className="text-left">
+                                        <p className="font-black text-zinc-900 dark:text-white uppercase tracking-tighter text-xl">Marketplace</p>
+                                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-widest mt-1">Compra y vende</p>
                                     </div>
                                 </Link>
 

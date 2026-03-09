@@ -1,105 +1,147 @@
 'use client';
 /**
- * AWS S3 Upload Utilities
+ * AWS S3 Upload Utilities — with Media Deduplication
  * 
- * Provides presigned URL uploads directly to S3 without saturating the server.
- * Files are uploaded client-side, bypassing Vercel's 4.5MB limit.
- * 
- * SETUP:
- * Add to .env.local:
- *   AWS_REGION=us-east-1
- *   AWS_ACCESS_KEY_ID=your-key
- *   AWS_SECRET_ACCESS_KEY=your-secret
- *   AWS_S3_BUCKET=your-bucket
+ * Flow:
+ * 1. Compute SHA-256 client-side (Web Crypto API)
+ * 2. Check jes-core if hash exists (instant response if duplicate)
+ * 3. If new: upload via jes-core multipart → S3 dedup pipeline
+ * 4. Return { mediaId, url }
  * 
  * @author Cloud Architect
  */
 
+const JES_CORE_URL = process.env.NEXT_PUBLIC_JES_CORE_URL || 'http://localhost:4000';
+
 // ==========================================
-// PRESIGNED URL FETCHER
+// CLIENT-SIDE SHA-256 HASH
 // ==========================================
 
 /**
- * Get a presigned URL from our API route
- * @param {string} fileName - Original file name
- * @param {string} fileType - MIME type
- * @param {string} folder - S3 folder (e.g., 'chat-media', 'avatars')
- * @returns {Promise<{uploadUrl: string, fileUrl: string, key: string}>}
+ * Compute SHA-256 hash of a file using Web Crypto API
+ * @param {File} file - File to hash
+ * @returns {Promise<string>} Hex-encoded SHA-256 hash
  */
-export async function getPresignedUrl(fileName, fileType, folder = 'chat-media') {
-    try {
-        const response = await fetch('/api/upload/presign', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fileName, fileType, folder })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to get presigned URL');
-        }
-
-        return await response.json();
-    } catch (err) {
-        console.error('Presigned URL error:', err);
-        throw err;
-    }
+export async function computeFileHash(file) {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // ==========================================
-// DIRECT S3 UPLOAD
+// DEDUP CHECK
 // ==========================================
 
 /**
- * Upload file directly to S3 using presigned URL
- * @param {File} file - File to upload
- * @param {string} folder - S3 folder
- * @param {Function} onProgress - Progress callback (0-100)
- * @returns {Promise<string>} Public URL of uploaded file
+ * Check if a file hash already exists in the media registry
+ * @param {string} fileHash - SHA-256 hex hash
+ * @returns {Promise<{exists: boolean, asset?: object}>}
  */
-export async function uploadToS3(file, folder = 'chat-media', onProgress = null) {
+async function checkDuplicate(fileHash) {
     try {
-        // Step 1: Get presigned URL from our API
-        const { uploadUrl, fileUrl, key } = await getPresignedUrl(
-            file.name,
-            file.type,
-            folder
-        );
+        const res = await fetch(`${JES_CORE_URL}/api/media/check-hash`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_hash: fileHash }),
+        });
+        if (res.ok) return await res.json();
+    } catch (err) {
+        console.warn('[Dedup] Hash check failed, proceeding with upload:', err.message);
+    }
+    return { exists: false };
+}
 
-        // Step 2: Upload directly to S3
-        await new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
+// ==========================================
+// DEDUP UPLOAD (via jes-core)
+// ==========================================
 
-            // Progress tracking
-            if (onProgress) {
-                xhr.upload.addEventListener('progress', (e) => {
-                    if (e.lengthComputable) {
-                        const percent = Math.round((e.loaded / e.total) * 100);
-                        onProgress(percent);
-                    }
-                });
-            }
+/**
+ * Upload file with automatic deduplication
+ * @param {File} file - File to upload
+ * @param {string} folder - S3 folder (unused now, jes-core handles keys)
+ * @param {Function} onProgress - Progress callback (0-100)
+ * @returns {Promise<{url: string, mediaId: string, wasDuplicate: boolean}>}
+ */
+export async function uploadToS3(file, folder = 'uploads', onProgress = null) {
+    try {
+        // Step 1: Compute hash client-side
+        if (onProgress) onProgress(5);
+        const fileHash = await computeFileHash(file);
+        if (onProgress) onProgress(15);
 
-            xhr.addEventListener('load', () => {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    resolve(xhr.response);
-                } else {
-                    reject(new Error(`Upload failed: ${xhr.status}`));
-                }
-            });
+        // Step 2: Check if duplicate exists
+        const { exists, asset } = await checkDuplicate(fileHash);
+        if (exists && asset) {
+            if (onProgress) onProgress(100);
+            console.log(`[Dedup] ✅ Duplicate found! Saved ${(file.size / 1024).toFixed(0)}KB upload`);
+            return {
+                url: asset.cdn_url || asset.s3_url,
+                mediaId: asset.id,
+                wasDuplicate: true,
+            };
+        }
 
-            xhr.addEventListener('error', () => reject(new Error('Upload failed')));
-            xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+        // Step 3: Upload new file via jes-core multipart
+        if (onProgress) onProgress(20);
+        const formData = new FormData();
+        formData.append('file', file);
 
-            xhr.open('PUT', uploadUrl);
-            xhr.setRequestHeader('Content-Type', file.type);
-            xhr.send(file);
+        const uploadRes = await fetch(`${JES_CORE_URL}/api/media/upload`, {
+            method: 'POST',
+            body: formData,
         });
 
-        return fileUrl;
+        if (!uploadRes.ok) {
+            const err = await uploadRes.text();
+            throw new Error(`Upload failed: ${err}`);
+        }
+
+        if (onProgress) onProgress(90);
+        const result = await uploadRes.json();
+        if (onProgress) onProgress(100);
+
+        return {
+            url: result.url,
+            mediaId: result.id,
+            wasDuplicate: result.was_duplicate,
+        };
     } catch (err) {
-        console.error('S3 upload error:', err);
-        throw err;
+        // Fallback: try legacy presigned upload if jes-core is unreachable
+        console.warn('[Dedup] jes-core upload failed, trying legacy route:', err.message);
+        return await legacyUpload(file, folder, onProgress);
     }
+}
+
+/**
+ * Legacy upload via Next.js API route (fallback when jes-core is unavailable)
+ */
+async function legacyUpload(file, folder, onProgress) {
+    const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, contentType: file.type, folder }),
+    });
+
+    if (!res.ok) throw new Error('Legacy upload also failed');
+
+    const { uploadUrl, publicUrl } = await res.json();
+
+    await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        if (onProgress) {
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+            });
+        }
+        xhr.addEventListener('load', () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`)));
+        xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Content-Type', file.type);
+        xhr.send(file);
+    });
+
+    return { url: publicUrl, mediaId: null, wasDuplicate: false };
 }
 
 // ==========================================
@@ -209,7 +251,7 @@ export function toCDNUrl(s3Url) {
 }
 
 export default {
-    getPresignedUrl,
+    computeFileHash,
     uploadToS3,
     uploadWithRetry,
     validateFile,
