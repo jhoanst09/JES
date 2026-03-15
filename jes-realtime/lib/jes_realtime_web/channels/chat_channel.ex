@@ -61,8 +61,8 @@ defmodule JesRealtimeWeb.ChatChannel do
     # Broadcast to all subscribers in this conversation
     broadcast!(socket, "message", message)
 
-    # Persist notification for offline recipients (chat category)
-    Task.start(fn -> notify_offline_recipients(conv_id, user_id, content, message_id) end)
+    # Notify offline participants via jes-core notification service
+    Task.start(fn -> notify_offline_participants(conv_id, user_id, content) end)
 
     {:reply, {:ok, %{id: message_id}}, socket}
   end
@@ -173,56 +173,46 @@ defmodule JesRealtimeWeb.ChatChannel do
     end
   end
 
-  # ==========================================
-  # Offline Notification Hook (Entire.io Integration)
-  # ==========================================
-
-  defp notify_offline_recipients(conv_id, sender_id, content, message_id) do
+  # Send notification to offline participants via jes-core
+  defp notify_offline_participants(conv_id, sender_id, content) do
     jes_core_url = System.get_env("JES_CORE_URL") || "http://localhost:4000"
 
-    # Get all members of this conversation
     case Redix.command(:redix, ["SMEMBERS", "conv_members:#{conv_id}"]) do
       {:ok, member_ids} ->
-        # Check who has an active socket in this channel
-        active_pids = JesRealtimeWeb.Presence.list("conv:#{conv_id}")
-        active_user_ids = Map.keys(active_pids)
+        for member_id <- member_ids, member_id != sender_id do
+          # Check if user is currently connected (has active presence)
+          presence_key = "presence:#{member_id}"
+          case Redix.command(:redix, ["EXISTS", presence_key]) do
+            {:ok, 0} ->
+              # User is offline — fire notification via jes-core
+              truncated = String.slice(content || "", 0..80)
+              body = Jason.encode!(%{
+                "user_id" => member_id,
+                "type" => "message",
+                "message" => truncated,
+                "actor_id" => sender_id,
+                "action_url" => "/chat"
+              })
 
-        for member_id <- member_ids,
-            member_id != sender_id,
-            member_id not in active_user_ids do
+              case :httpc.request(
+                :post,
+                {~c"#{jes_core_url}/api/notifications", [], ~c"application/json", body},
+                [{:timeout, 5000}],
+                []
+              ) do
+                {:ok, _} -> :ok
+                {:error, reason} ->
+                  Logger.warn("[Chat] Failed to notify offline user #{member_id}: #{inspect(reason)}")
+              end
 
-          # This user is offline — persist a notification via jes-core
-          body = Jason.encode!(%{
-            user_id: member_id,
-            category: "info",
-            title: "Nuevo mensaje",
-            message: String.slice(content, 0, 120),
-            icon: "💬",
-            action_url: "/chat?conv=#{conv_id}",
-            metadata: %{
-              source: "jes-realtime",
-              conversation_id: conv_id,
-              message_id: message_id,
-              entire_session: "chat-offline-#{conv_id}"
-            }
-          })
-
-          case :httpc.request(
-            :post,
-            {~c"#{jes_core_url}/api/notifications", [], ~c"application/json", body},
-            [{:timeout, 5000}],
-            []
-          ) do
-            {:ok, _} ->
-              Logger.debug("[Chat] Offline notification sent for user #{member_id}")
-
-            {:error, reason} ->
-              Logger.warn("[Chat] Failed to send offline notification: #{inspect(reason)}")
+            _ ->
+              # User is online, broadcast handles it
+              :ok
           end
         end
 
       {:error, _} ->
-        Logger.warn("[Chat] Could not get members for offline notifications")
+        Logger.warn("[Chat] Could not get members for offline notification")
     end
   end
 end

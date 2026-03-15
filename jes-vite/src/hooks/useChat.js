@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { usePresence } from './usePresence';
 
 // UUID v4 pattern
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -25,12 +26,16 @@ export function useChat(roomId = null, userId = null) {
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState(null);
+    const [isPartnerTypingState, setIsPartnerTypingState] = useState(false);
     const pollingRef = useRef(null);
+    const typingPollRef = useRef(null);
     const messagesRef = useRef([]);
     const tempIdCounter = useRef(0);
+    const lastTypingSentRef = useRef(0);
 
     const currentUserId = userId || user?.id;
     const isConversation = roomId && UUID_REGEX.test(roomId);
+    const { isUserOnline, setTyping: setPresenceTyping, checkTyping } = usePresence(currentUserId);
 
     // Keep ref in sync
     useEffect(() => {
@@ -279,8 +284,45 @@ export function useChat(roomId = null, userId = null) {
         if (url) await sendMessage(file.name, 'file', url);
     };
 
-    // Stub for typing indicator
-    const sendTyping = useCallback(() => { }, []);
+    // Real typing indicator — throttled to once per 2s
+    const sendTyping = useCallback(() => {
+        if (!roomId || !isConversation) return;
+        const now = Date.now();
+        if (now - lastTypingSentRef.current < 2000) return;
+        lastTypingSentRef.current = now;
+        setPresenceTyping?.(roomId);
+    }, [roomId, isConversation, setPresenceTyping]);
+
+    // Poll partner typing status every 2 seconds
+    useEffect(() => {
+        if (!roomId || !isConversation || !currentUserId) {
+            setIsPartnerTypingState(false);
+            return;
+        }
+
+        // Find the partner user ID from messages (the other sender)
+        const partnerMsg = messagesRef.current.find(m => m.sender_id && m.sender_id !== currentUserId);
+        const partnerId = partnerMsg?.sender_id;
+
+        if (!partnerId) return;
+
+        const pollTyping = async () => {
+            const typing = await checkTyping?.(partnerId, roomId);
+            setIsPartnerTypingState(!!typing);
+        };
+
+        pollTyping();
+        typingPollRef.current = setInterval(pollTyping, 2000);
+
+        return () => {
+            if (typingPollRef.current) clearInterval(typingPollRef.current);
+        };
+    }, [roomId, isConversation, currentUserId, checkTyping]);
+
+    // Determine if partner is online
+    const partnerMsg = messages.find(m => m.sender_id && m.sender_id !== currentUserId);
+    const partnerId = partnerMsg?.sender_id;
+    const isPartnerOnlineVal = partnerId ? isUserOnline(partnerId) : false;
 
     return {
         messages,
@@ -294,8 +336,8 @@ export function useChat(roomId = null, userId = null) {
         sendTyping,
         retryMessage,
         pendingCount: messages.filter(m => m._status === MSG_STATUS.SENDING).length,
-        isPartnerOnline: false,
-        isPartnerTyping: false,
+        isPartnerOnline: isPartnerOnlineVal,
+        isPartnerTyping: isPartnerTypingState,
         refreshMessages: fetchMessages,
         isConnected: isLoggedIn,
     };

@@ -1,0 +1,22 @@
+warning: patch `time v0.3.36 (https://github.com/time-rs/time?tag=v0.3.36#3c3c546a)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+   Compiling getrandom v0.3.4
+   Compiling syn v2.0.117
+    Checking http-body v1.0.1
+    Checking http v0.2.12
+   Compiling time-core v0.1.8
+   Compiling num-conv v0.2.0
+    Checking powerfmt v0.2.0
+    Checking pin-utils v0.1.0
+    Checking ryu v1.0.23
+   Compiling zerocopy v0.8.42
+    Checking generic-array v0.14.7
+error: error calling dlltool 'dlltool.exe': program not found
+
+   Compiling jobserver v0.1.34
+    Checking http-body-util v0.1.3
+error: could not compile `getrandom` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

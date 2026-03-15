@@ -15,6 +15,23 @@
     --text-muted: #71717a;
     --border-color: rgba(255, 255, 255, 0.1);
     --icon-color: rgba(255, 255, 255, 0.8);
+
+    /* Sileo — JES Nerd/Tech Neon Palette */
+    --sileo-state-success: oklch(0.75 0.22 155);
+    /* Neon green */
+    --sileo-state-loading: oklch(0.6 0.15 260);
+    /* Electric blue */
+    --sileo-state-error: oklch(0.65 0.26 25);
+    /* Neon red */
+    --sileo-state-warning: oklch(0.82 0.19 80);
+    /* Neon amber */
+    --sileo-state-info: oklch(0.72 0.18 220);
+    /* Cyan */
+    --sileo-state-action: oklch(0.65 0.22 275);
+    /* Electric purple */
+    --sileo-width: 380px;
+    --sileo-height: 44px;
+    --sileo-duration: 500ms;
 }
 
 .light-mode {
@@ -88,4 +105,99 @@ body {
 
 .light-mode .custom-scrollbar::-webkit-scrollbar-thumb {
     background: rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================
+   Sileo Toast — JES Glassmorphism Overrides
+   ============================================ */
+
+/* Container glassmorphism effect */
+[data-sileo-toaster] [data-sileo-toast] {
+    backdrop-filter: blur(24px) saturate(1.8) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.8) !important;
+}
+
+/* Neon left-border per category */
+[data-sileo-toast][data-type="info"] {
+    border-left: 4px solid #00D1FF !important;
+    box-shadow: 0 8px 32px rgba(0, 209, 255, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-sileo-toast][data-type="success"] {
+    border-left: 4px solid #39FF14 !important;
+    box-shadow: 0 8px 32px rgba(57, 255, 20, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-sileo-toast][data-type="warning"] {
+    border-left: 4px solid #FFD700 !important;
+    box-shadow: 0 8px 32px rgba(255, 215, 0, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-sileo-toast][data-type="error"] {
+    border-left: 4px solid #FF3131 !important;
+    box-shadow: 0 8px 32px rgba(255, 49, 49, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-sileo-toast][data-type="loading"] {
+    border-left: 4px solid #6366f1 !important;
+    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Light mode Sileo overrides */
+.light-mode [data-sileo-toast][data-type="info"] {
+    box-shadow: 0 8px 32px rgba(0, 209, 255, 0.1), inset 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.light-mode [data-sileo-toast][data-type="success"] {
+    box-shadow: 0 8px 32px rgba(57, 255, 20, 0.1), inset 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.light-mode [data-sileo-toast][data-type="warning"] {
+    box-shadow: 0 8px 32px rgba(255, 215, 0, 0.1), inset 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.light-mode [data-sileo-toast][data-type="error"] {
+    box-shadow: 0 8px 32px rgba(255, 49, 49, 0.1), inset 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* ============================================
+   MOBILE PERFORMANCE — Blur Reduction
+   ============================================
+   On mobile GPUs, backdrop-blur is very expensive.
+   These overrides cap values to lighter levels.
+*/
+@media (max-width: 768px) {
+    .backdrop-blur-3xl {
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+    }
+
+    .backdrop-blur-2xl {
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+    }
+
+    .backdrop-blur-xl {
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+    }
+}
+
+/* ============================================
+   MOBILE PERFORMANCE — Animation Throttling
+   ============================================ */
+@media (max-width: 768px) and (prefers-reduced-motion: no-preference) {
+    .animate-pulse {
+        animation-duration: 3s !important;
+    }
+
+    .animate-ping {
+        animation: none !important;
+    }
+}
+
+/* content-visibility for off-screen sidebar nav items */
+.sidebar-nav-item {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 64px;
 }

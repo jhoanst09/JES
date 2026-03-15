@@ -1,45 +1,52 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
 use uuid::Uuid;
 
-/// A persisted user notification.
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct UserNotification {
+/// Notification record from PostgreSQL `notifications` table.
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct Notification {
     pub id: Uuid,
     pub user_id: Uuid,
-    pub category: String,     // info | success | warning | error
-    pub title: String,
-    pub message: String,
-    pub icon: Option<String>,
-    pub action_url: Option<String>,
+    #[sqlx(rename = "type")]
+    pub notification_type: String,
+    pub message: Option<String>,
+    pub content: Option<String>,
     pub is_read: bool,
-    pub metadata: serde_json::Value, // Entire.io session/checkpoint data
-    pub created_at: DateTime<Utc>,
-    pub read_at: Option<DateTime<Utc>>,
-}
-
-/// Request to create a new notification.
-#[derive(Debug, Deserialize)]
-pub struct CreateNotificationRequest {
-    pub user_id: Uuid,
-    pub category: String,
-    pub title: String,
-    pub message: String,
-    pub icon: Option<String>,
+    pub actor_id: Option<Uuid>,
+    pub post_id: Option<Uuid>,
     pub action_url: Option<String>,
-    pub metadata: Option<serde_json::Value>,
+    pub created_at: chrono::NaiveDateTime,
 }
 
-/// Request to mark notifications as read.
-#[derive(Debug, Deserialize)]
-pub struct MarkReadRequest {
+/// Enriched notification with actor info (for API responses).
+#[derive(Debug, Serialize, FromRow)]
+pub struct NotificationWithActor {
+    pub id: Uuid,
     pub user_id: Uuid,
-    pub notification_ids: Option<Vec<Uuid>>, // None = mark all
+    #[sqlx(rename = "type")]
+    pub notification_type: String,
+    pub message: Option<String>,
+    pub content: Option<String>,
+    pub is_read: bool,
+    pub action_url: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
+    pub actor_name: Option<String>,
+    pub actor_avatar: Option<String>,
 }
 
-/// Response with notification list and unread count.
+/// Request to create a notification (from payment/coin events).
+#[derive(Debug, Deserialize)]
+pub struct CreateNotification {
+    pub user_id: Uuid,
+    #[serde(rename = "type")]
+    pub notification_type: String,
+    pub message: String,
+    pub actor_id: Option<Uuid>,
+    pub action_url: Option<String>,
+}
+
+/// Unread count response.
 #[derive(Debug, Serialize)]
-pub struct NotificationsResponse {
-    pub notifications: Vec<UserNotification>,
-    pub unread_count: i64,
+pub struct UnreadCount {
+    pub count: i64,
 }

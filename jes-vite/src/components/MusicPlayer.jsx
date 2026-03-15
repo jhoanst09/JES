@@ -37,6 +37,10 @@ export default function MusicPlayer() {
                     trackData.title = data.trackName;
                     trackData.cover = data.artworkUrl || trackData.cover;
                     setPlaylist(data.tracklist || []);
+                } else {
+                    // No preview found - show track info but don't crash
+                    console.warn('[MusicPlayer] No preview found for:', trackData.title);
+                    trackData.audioSrc = null;
                 }
             }
 
@@ -231,7 +235,13 @@ export default function MusicPlayer() {
                             </div>
                         </div>
 
-                        <div className="hidden lg:flex w-[300px] justify-end shrink-0">
+                        <div className="hidden lg:flex w-[300px] justify-end shrink-0 gap-2">
+                            <a
+                                href={`/search?q=${encodeURIComponent(currentTrack.artist + ' ' + currentTrack.title)}`}
+                                className="p-4 text-zinc-500 hover:text-orange-500 transition-colors" title="Buscar en la tienda"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 7h10v10" /><path d="M7 17 17 7" /></svg>
+                            </a>
                             <button onClick={() => setUiStage(1)} className="p-4 text-zinc-500 hover:text-white">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                             </button>

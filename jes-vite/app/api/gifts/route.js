@@ -5,6 +5,7 @@ import db from '@/src/utils/db/postgres';
  * POST /api/gifts
  * Create a gift record (pending payment)
  * Body: { senderId, recipientId, productHandle, productTitle, productImage, amount, currency, message?, bagId? }
+ * NOTE: shipping_address is fetched SERVER-SIDE from recipient's profile — never sent by client
  */
 export async function POST(request) {
     try {
@@ -27,12 +28,41 @@ export async function POST(request) {
         // Generate external reference for payment matching
         const externalRef = `gift_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-        const gift = await db.queryOne(
-            `INSERT INTO gifts (sender_id, recipient_id, product_handle, product_title, product_image, amount, currency, payment_external_ref, bag_id, message)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-             RETURNING *`,
-            [senderId, recipientId, productHandle, productTitle || '', productImage || '', amount, currency, externalRef, bagId || null, message || null]
-        );
+        // Fetch recipient's shipping address SERVER-SIDE (never exposed to sender)
+        let recipientShippingAddress = null;
+        try {
+            const recipientProfile = await db.queryOne(
+                'SELECT shipping_address FROM profiles WHERE id = $1',
+                [recipientId]
+            );
+            if (recipientProfile?.shipping_address) {
+                recipientShippingAddress = recipientProfile.shipping_address;
+            }
+        } catch (e) {
+            // Column may not exist yet, continue without address
+        }
+
+        let gift;
+        try {
+            gift = await db.queryOne(
+                `INSERT INTO gifts (sender_id, recipient_id, product_handle, product_title, product_image, amount, currency, payment_external_ref, bag_id, message, shipping_address)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                 RETURNING *`,
+                [senderId, recipientId, productHandle, productTitle || '', productImage || '', amount, currency, externalRef, bagId || null, message || null, recipientShippingAddress ? JSON.stringify(recipientShippingAddress) : null]
+            );
+        } catch (colErr) {
+            gift = await db.queryOne(
+                `INSERT INTO gifts (sender_id, recipient_id, product_handle, product_title, product_image, amount, currency, payment_external_ref, bag_id, message)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                 RETURNING *`,
+                [senderId, recipientId, productHandle, productTitle || '', productImage || '', amount, currency, externalRef, bagId || null, message || null]
+            );
+        }
+
+        // Don't return shipping_address to the client!
+        if (gift?.shipping_address) {
+            delete gift.shipping_address;
+        }
 
         return NextResponse.json({ gift }, { status: 201 });
     } catch (error) {

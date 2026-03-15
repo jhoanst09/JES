@@ -1,0 +1,957 @@
+defmodule Xandra.Protocol.V4 do
+  @moduledoc false
+
+  import Xandra.Protocol,
+    only: [decode_from_proto_type: 2, decode_from_proto_type: 3, encode_to_type: 2, is_decimal: 1]
+
+  alias Xandra.{
+    Batch,
+    Error,
+    Frame,
+    Page,
+    Prepared,
+    Simple,
+    TypeParser
+  }
+
+  alias Xandra.Protocol, as: Proto
+
+  alias Xandra.Cluster.{StatusChange, TopologyChange}
+
+  @unix_epoch_days 0x80000000
+
+  @spec encode_request(Frame.t(kind), term, keyword) :: Frame.t(kind) when kind: var
+  def encode_request(frame, params, options \\ [])
+
+  def encode_request(%Frame{kind: :options} = frame, nil, _options) do
+    %{frame | body: []}
+  end
+
+  def encode_request(%Frame{kind: :startup} = frame, requested_options, _options)
+      when is_map(requested_options) do
+    %Frame{frame | body: encode_to_type(requested_options, "[string map]")}
+  end
+
+  def encode_request(%Frame{kind: :auth_response} = frame, _requested_options, options) do
+    case Keyword.fetch(options, :authentication) do
+      {:ok, authentication} ->
+        with {authenticator, auth_options} <- authentication,
+             body <- authenticator.response_body(auth_options) do
+          %{frame | body: [<<IO.iodata_length(body)::32>>, body]}
+        else
+          _ ->
+            raise "the :authentication option must be " <>
+                    "an {auth_module, auth_options} tuple, " <> "got: #{inspect(authentication)}"
+        end
+
+      :error ->
+        raise "Cassandra server requires authentication but the :authentication option was not provided"
+    end
+  end
+
+  def encode_request(%Frame{kind: :register} = frame, events, _options) when is_list(events) do
+    %Frame{frame | body: encode_to_type(events, "[string list]")}
+  end
+
+  def encode_request(%Frame{kind: :query} = frame, %Simple{} = query, options) do
+    %Simple{statement: statement, values: values, custom_payload: custom_payload} = query
+
+    body = [
+      encode_custom_payload(custom_payload),
+      <<byte_size(statement)::32>>,
+      statement,
+      encode_params([], values, options, query.default_consistency, _skip_metadata? = false)
+    ]
+
+    %Frame{frame | body: body}
+  end
+
+  def encode_request(%Frame{kind: :prepare} = frame, %Prepared{} = prepared, _options) do
+    %Prepared{statement: statement, request_custom_payload: custom_payload} = prepared
+
+    body = [
+      encode_custom_payload(custom_payload),
+      <<byte_size(statement)::32>>,
+      statement
+    ]
+
+    %Frame{frame | body: body}
+  end
+
+  def encode_request(%Frame{kind: :execute} = frame, %Prepared{} = prepared, options) do
+    %Prepared{
+      id: id,
+      bound_columns: columns,
+      values: values,
+      request_custom_payload: custom_payload
+    } = prepared
+
+    skip_metadata? = prepared.result_columns != nil
+
+    body = [
+      encode_custom_payload(custom_payload),
+      <<byte_size(id)::16>>,
+      id,
+      encode_params(columns, values, options, prepared.default_consistency, skip_metadata?)
+    ]
+
+    %Frame{frame | body: body}
+  end
+
+  def encode_request(%Frame{kind: :batch} = frame, %Batch{} = batch, options) do
+    %Batch{queries: queries, type: type, custom_payload: custom_payload} = batch
+
+    consistency = Keyword.get(options, :consistency, batch.default_consistency)
+    serial_consistency = Keyword.get(options, :serial_consistency)
+    timestamp = Keyword.get(options, :timestamp)
+
+    flags =
+      0x00
+      |> Proto.set_flag(_serial_consistency = 0x10, serial_consistency)
+      |> Proto.set_flag(_default_timestamp = 0x20, timestamp)
+
+    encoded_queries = [<<length(queries)::16>>] ++ Enum.map(queries, &encode_query_in_batch/1)
+
+    body = [
+      encode_custom_payload(custom_payload),
+      Proto.encode_batch_type(type),
+      encoded_queries,
+      encode_to_type(consistency, "[consistency]"),
+      flags,
+      Proto.encode_serial_consistency(serial_consistency),
+      if(timestamp, do: <<timestamp::64>>, else: [])
+    ]
+
+    %Frame{frame | body: body}
+  end
+
+  ## Server payloads
+  # We want to have the code for encoding some payloads even if they're payloads that are
+  # only server to client. This is pretty easy to write, but all-in-all very useful for
+  # debugging and testing.
+
+  def encode_request(%Frame{kind: :event} = frame, %_{} = event, _options) do
+    %Frame{frame | body: Proto.encode_event(event)}
+  end
+
+  defp encode_custom_payload(nil) do
+    []
+  end
+
+  defp encode_custom_payload(custom_payload) when is_map(custom_payload) do
+    key_value_pairs =
+      for {key, value} <- custom_payload do
+        [<<byte_size(key)::16>>, key, <<byte_size(value)::32>>, value]
+      end
+
+    [<<map_size(custom_payload)::16>> | key_value_pairs]
+  end
+
+  defp encode_params(columns, values, options, default_consistency, skip_metadata?) do
+    consistency = Keyword.get(options, :consistency, default_consistency)
+    page_size = Keyword.get(options, :page_size, 10_000)
+    paging_state = Keyword.get(options, :paging_state)
+    serial_consistency = Keyword.get(options, :serial_consistency)
+    timestamp = Keyword.get(options, :timestamp)
+
+    flags =
+      0x00
+      |> Proto.set_query_values_flag(values)
+      |> Proto.set_flag(_page_size = 0x04, true)
+      |> Proto.set_flag(_metadata_presence = 0x02, skip_metadata?)
+      |> Proto.set_flag(_paging_state = 0x08, paging_state)
+      |> Proto.set_flag(_serial_consistency = 0x10, serial_consistency)
+      |> Proto.set_flag(_default_timestamp = 0x20, timestamp)
+
+    encoded_values =
+      if values == [] or values == %{} do
+        []
+      else
+        encode_query_values(columns, values)
+      end
+
+    [
+      encode_to_type(consistency, "[consistency]"),
+      flags,
+      encoded_values,
+      <<page_size::32>>,
+      Proto.encode_paging_state(paging_state),
+      Proto.encode_serial_consistency(serial_consistency),
+      if(timestamp, do: <<timestamp::64>>, else: [])
+    ]
+  end
+
+  defp encode_query_in_batch(%Simple{statement: statement, values: values}) do
+    [
+      _kind = 0,
+      <<byte_size(statement)::32>>,
+      statement,
+      encode_query_values([], values)
+    ]
+  end
+
+  defp encode_query_in_batch(%Prepared{id: id, bound_columns: bound_columns, values: values}) do
+    [
+      _kind = 1,
+      <<byte_size(id)::16>>,
+      id,
+      encode_query_values(bound_columns, values)
+    ]
+  end
+
+  defp encode_query_values([], values) when is_list(values) do
+    [<<length(values)::16>>] ++ Enum.map(values, &encode_query_value/1)
+  end
+
+  defp encode_query_values([], values) when is_map(values) do
+    parts =
+      for {name, value} <- values do
+        name = to_string(name)
+        [<<byte_size(name)::16>>, name, encode_query_value(value)]
+      end
+
+    [<<map_size(values)::16>>] ++ parts
+  end
+
+  defp encode_query_values(columns, values) when is_list(values) do
+    encode_bound_values(columns, values, [<<length(columns)::16>>])
+  end
+
+  defp encode_query_values(columns, values) when map_size(values) == length(columns) do
+    parts =
+      for {_keyspace, _table, name, type} <- columns do
+        value = Map.fetch!(values, name)
+        [<<byte_size(name)::16>>, name, encode_query_value(type, value)]
+      end
+
+    [<<map_size(values)::16>>] ++ parts
+  end
+
+  defp encode_bound_values([], [], acc) do
+    acc
+  end
+
+  defp encode_bound_values([column | columns], [value | values], acc) do
+    {_keyspace, _table, _name, type} = column
+    acc = [acc | encode_query_value(type, value)]
+    encode_bound_values(columns, values, acc)
+  end
+
+  defp encode_query_value({type, value}) when is_binary(type) do
+    encode_query_value(TypeParser.parse(type), value)
+  end
+
+  defp encode_query_value(_type, nil) do
+    <<-1::32>>
+  end
+
+  defp encode_query_value(_type, :not_set) do
+    <<-2::32>>
+  end
+
+  defp encode_query_value(type, value) do
+    acc = encode_value(type, value)
+    [<<IO.iodata_length(acc)::32>>, acc]
+  end
+
+  defp encode_value(:ascii, value) when is_binary(value) do
+    value
+  end
+
+  defp encode_value(:bigint, value) when is_integer(value) do
+    <<value::64>>
+  end
+
+  defp encode_value(:blob, value) when is_binary(value) do
+    value
+  end
+
+  defp encode_value(:boolean, value) do
+    case value do
+      true -> [1]
+      false -> [0]
+    end
+  end
+
+  defp encode_value(:counter, value) when is_integer(value) do
+    <<value::64>>
+  end
+
+  defp encode_value(:date, %Date{} = value) do
+    value = Proto.date_to_unix_days(value)
+    <<value + @unix_epoch_days::32>>
+  end
+
+  defp encode_value(:date, value) when value in -@unix_epoch_days..(@unix_epoch_days - 1)//1 do
+    <<value + @unix_epoch_days::32>>
+  end
+
+  defp encode_value(:decimal, {value, scale}) do
+    [encode_value(:int, scale), encode_value(:varint, value)]
+  end
+
+  # Decimal stores the decimal as "sign * coef * 10^exp", but Cassandra stores it
+  # as "coef * 10^(-1 * exp).
+  defp encode_value(:decimal, decimal) do
+    if is_decimal(decimal) do
+      %Decimal{coef: coef, exp: exp, sign: sign} = decimal
+      encode_value(:decimal, {_value = sign * coef, _scale = -exp})
+    else
+      raise ArgumentError,
+            "can only encode %Decimal{} structs or {value, scale} tuples as decimals"
+    end
+  end
+
+  defp encode_value(:double, value) when is_float(value) do
+    <<value::64-float>>
+  end
+
+  defp encode_value(:float, value) when is_float(value) do
+    <<value::32-float>>
+  end
+
+  defp encode_value(:inet, {n1, n2, n3, n4}) do
+    <<n1, n2, n3, n4>>
+  end
+
+  defp encode_value(:inet, {n1, n2, n3, n4, n5, n6, n7, n8}) do
+    <<n1::16, n2::16, n3::16, n4::16, n5::16, n6::16, n7::16, n8::16>>
+  end
+
+  defp encode_value(:int, value) when is_integer(value) do
+    <<value::32>>
+  end
+
+  defp encode_value({:list, [items_type]}, collection) when is_list(collection) do
+    [<<length(collection)::32>>] ++ Enum.map(collection, &encode_query_value(items_type, &1))
+  end
+
+  defp encode_value({:map, [key_type, value_type]}, collection) when is_map(collection) do
+    parts =
+      for {key, value} <- collection do
+        [
+          encode_query_value(key_type, key),
+          encode_query_value(value_type, value)
+        ]
+      end
+
+    [<<map_size(collection)::32>>] ++ parts
+  end
+
+  defp encode_value({:set, inner_type}, %MapSet{} = collection) do
+    encode_value({:list, inner_type}, MapSet.to_list(collection))
+  end
+
+  defp encode_value(:smallint, value) when is_integer(value) do
+    <<value::16>>
+  end
+
+  defp encode_value(:time, %Time{} = time) do
+    value = Proto.time_to_nanoseconds(time)
+    <<value::64>>
+  end
+
+  defp encode_value(:time, value) when value in 0..86_399_999_999_999 do
+    <<value::64>>
+  end
+
+  defp encode_value(:timestamp, %DateTime{} = value) do
+    <<DateTime.to_unix(value, :millisecond)::64>>
+  end
+
+  defp encode_value(:timestamp, value) when is_integer(value) do
+    <<value::64>>
+  end
+
+  defp encode_value(:tinyint, value) when is_integer(value) do
+    <<value>>
+  end
+
+  defp encode_value({:udt, fields}, value) when is_map(value) do
+    for {field_name, [field_type]} <- fields do
+      encode_query_value(field_type, Map.get(value, field_name))
+    end
+  end
+
+  defp encode_value(type, value) when type in [:uuid, :timeuuid] and is_binary(value) do
+    Proto.encode_uuid(value)
+  end
+
+  defp encode_value(type, value) when type in [:varchar, :text] and is_binary(value) do
+    value
+  end
+
+  defp encode_value(:varint, value) when is_integer(value) do
+    size = Proto.varint_byte_size(value)
+    <<value::size(size)-unit(8)>>
+  end
+
+  defp encode_value({:tuple, types}, value) when length(types) == tuple_size(value) do
+    for {type, item} <- Enum.zip(types, Tuple.to_list(value)), do: encode_query_value(type, item)
+  end
+
+  defp decode_error_message(_reason, buffer) do
+    decode_from_proto_type(message <- buffer, "[string]")
+    _ = buffer
+    message
+  end
+
+  @spec decode_response(Frame.t(:error), term) :: Error.t()
+  @spec decode_response(Frame.t(:ready), nil) :: :ok
+  @spec decode_response(Frame.t(:supported), nil) :: %{optional(String.t()) => [String.t()]}
+  @spec decode_response(Frame.t(:result), Simple.t() | Prepared.t() | Batch.t()) ::
+          {Xandra.result() | Prepared.t(), warnings :: []}
+  def decode_response(frame, query \\ nil, options \\ [])
+
+  def decode_response(%Frame{kind: :error, body: body, warning: warning?}, _query, _options) do
+    {warnings, body} = Proto.decode_warnings(body, warning?)
+    {reason, buffer} = Proto.decode_error_reason(body)
+    Error.new(reason, decode_error_message(reason, buffer), warnings)
+  end
+
+  def decode_response(%Frame{kind: :ready, body: <<>>}, nil, _options) do
+    :ok
+  end
+
+  def decode_response(%Frame{kind: :supported, body: body}, nil, _options) do
+    decode_from_proto_type(value <- body, "[string multimap]")
+    <<>> = body
+    value
+  end
+
+  def decode_response(%Frame{kind: :event, body: body}, nil, _options) do
+    decode_from_proto_type(event <- body, "[string]")
+    decode_from_proto_type(effect <- body, "[string]")
+    decode_from_proto_type(address_and_port <- body, "[inet]")
+    {address, port} = address_and_port
+    <<>> = body
+
+    case event do
+      "STATUS_CHANGE" -> %StatusChange{effect: effect, address: address, port: port}
+      "TOPOLOGY_CHANGE" -> %TopologyChange{effect: effect, address: address, port: port}
+    end
+  end
+
+  def decode_response(
+        %Frame{
+          kind: :result,
+          body: body,
+          tracing: tracing?,
+          custom_payload: custom_payload?,
+          atom_keys?: atom_keys?,
+          warning: warning?
+        },
+        %kind{} = query,
+        options
+      )
+      when kind in [Simple, Prepared, Batch] do
+    {body, tracing_id} = Proto.decode_tracing_id(body, tracing?)
+    {warnings, body} = Proto.decode_warnings(body, warning?)
+    {custom_payload, body} = Proto.decode_custom_payload(body, custom_payload?)
+
+    result =
+      decode_result_response(
+        body,
+        query,
+        tracing_id,
+        custom_payload,
+        Keyword.put(options, :atom_keys?, atom_keys?)
+      )
+
+    {result, warnings}
+  end
+
+  # We decode to consume the warning from the body but we ignore the result
+
+  # Void
+  defp decode_result_response(
+         <<0x0001::32-signed>>,
+         _query,
+         tracing_id,
+         custom_payload,
+         _options
+       ) do
+    %Xandra.Void{tracing_id: tracing_id, custom_payload: custom_payload}
+  end
+
+  # Page
+  defp decode_result_response(
+         <<0x0002::32-signed, buffer::bits>>,
+         query,
+         tracing_id,
+         custom_payload,
+         options
+       ) do
+    %Page{} = page = Proto.new_page(query)
+    {page, buffer} = decode_metadata(buffer, page, Keyword.fetch!(options, :atom_keys?))
+    columns = rewrite_column_types(page.columns, options)
+
+    %Page{
+      page
+      | content: decode_page_content(buffer, columns),
+        tracing_id: tracing_id,
+        custom_payload: custom_payload
+    }
+  end
+
+  # SetKeyspace
+  defp decode_result_response(
+         <<0x0003::32-signed, buffer::bits>>,
+         _query,
+         tracing_id,
+         custom_payload,
+         _options
+       ) do
+    decode_from_proto_type(keyspace <- buffer, "[string]")
+    <<>> = buffer
+
+    %Xandra.SetKeyspace{
+      keyspace: keyspace,
+      tracing_id: tracing_id,
+      custom_payload: custom_payload
+    }
+  end
+
+  # Prepared
+  defp decode_result_response(
+         <<0x0004::32-signed, buffer::bits>>,
+         %Prepared{} = prepared,
+         tracing_id,
+         custom_payload,
+         options
+       ) do
+    atom_keys? = Keyword.fetch!(options, :atom_keys?)
+    decode_from_proto_type(id <- buffer, "[string]")
+    {%{columns: bound_columns}, buffer} = decode_metadata_prepared(buffer, %Page{}, atom_keys?)
+    {%{columns: result_columns}, <<>>} = decode_metadata(buffer, %Page{}, atom_keys?)
+
+    %Prepared{
+      prepared
+      | id: id,
+        bound_columns: bound_columns,
+        result_columns: result_columns,
+        tracing_id: tracing_id,
+        response_custom_payload: custom_payload
+    }
+  end
+
+  # SchemaChange
+  defp decode_result_response(
+         <<0x0005::32-signed, buffer::bits>>,
+         _query,
+         tracing_id,
+         custom_payload,
+         _options
+       ) do
+    decode_from_proto_type(effect <- buffer, "[string]")
+    decode_from_proto_type(target <- buffer, "[string]")
+    options = decode_change_options(buffer, target)
+
+    %Xandra.SchemaChange{
+      effect: effect,
+      target: target,
+      options: options,
+      tracing_id: tracing_id,
+      custom_payload: custom_payload
+    }
+  end
+
+  defp rewrite_column_types(columns, options) do
+    Enum.map(columns, fn {_, _, _, type} = column ->
+      put_elem(column, 3, Proto.rewrite_type(type, options))
+    end)
+  end
+
+  defp decode_change_options(<<buffer::bits>>, "KEYSPACE") do
+    decode_from_proto_type(keyspace <- buffer, "[string]")
+    <<>> = buffer
+    %{keyspace: keyspace}
+  end
+
+  defp decode_change_options(<<buffer::bits>>, target) when target in ["TABLE", "TYPE"] do
+    decode_from_proto_type(keyspace <- buffer, "[string]")
+    decode_from_proto_type(subject <- buffer, "[string]")
+    <<>> = buffer
+    %{keyspace: keyspace, subject: subject}
+  end
+
+  defp decode_change_options(<<buffer::bits>>, target) when target in ["FUNCTION", "AGGREGATE"] do
+    decode_from_proto_type(keyspace <- buffer, "[string]")
+    decode_from_proto_type(subject <- buffer, "[string]")
+    decode_from_proto_type(values <- buffer, "[string list]")
+    <<>> = buffer
+    %{keyspace: keyspace, subject: subject, arguments: values}
+  end
+
+  defp decode_metadata_prepared(
+         <<flags::4-bytes, column_count::32-signed, pk_count::32-signed, buffer::bits>>,
+         page,
+         atom_keys?
+       ) do
+    <<_::31, global_table_spec::1>> = flags
+
+    # partition key bind indices are ignored as we do not support token-aware routing
+    {_indices, buffer} = Proto.decode_pk_index(buffer, pk_count, [])
+
+    cond do
+      global_table_spec == 1 ->
+        decode_from_proto_type(keyspace <- buffer, "[string]")
+        decode_from_proto_type(table <- buffer, "[string]")
+
+        {columns, buffer} =
+          decode_columns(buffer, column_count, {keyspace, table}, atom_keys?, [])
+
+        {%{page | columns: columns}, buffer}
+
+      true ->
+        {columns, buffer} = decode_columns(buffer, column_count, nil, atom_keys?, [])
+        {%{page | columns: columns}, buffer}
+    end
+  end
+
+  # metadate format from the "Rows" result response
+  defp decode_metadata(
+         <<flags::4-bytes, column_count::32-signed, buffer::bits>>,
+         page,
+         atom_keys?
+       ) do
+    <<_::29, no_metadata::1, has_more_pages::1, global_table_spec::1>> = flags
+    {page, buffer} = Proto.decode_paging_state(buffer, page, has_more_pages)
+
+    cond do
+      no_metadata == 1 ->
+        {page, buffer}
+
+      global_table_spec == 1 ->
+        decode_from_proto_type(keyspace <- buffer, "[string]")
+        decode_from_proto_type(table <- buffer, "[string]")
+
+        {columns, buffer} =
+          decode_columns(buffer, column_count, {keyspace, table}, atom_keys?, [])
+
+        {%{page | columns: columns}, buffer}
+
+      true ->
+        {columns, buffer} = decode_columns(buffer, column_count, nil, atom_keys?, [])
+        {%{page | columns: columns}, buffer}
+    end
+  end
+
+  defp decode_page_content(<<row_count::32-signed, buffer::bits>>, columns) do
+    decode_page_content(buffer, row_count, columns, columns, [[]])
+  end
+
+  defp decode_page_content(<<>>, 0, columns, columns, [[] | acc]) do
+    Enum.reverse(acc)
+  end
+
+  defp decode_page_content(<<buffer::bits>>, row_count, columns, [], [values | acc]) do
+    decode_page_content(buffer, row_count - 1, columns, columns, [[], Enum.reverse(values) | acc])
+  end
+
+  defp decode_page_content(<<buffer::bits>>, row_count, columns, [{_, _, _, type} | rest], [
+         values | acc
+       ]) do
+    decode_from_proto_type(value <- buffer, "[value]") do
+      values = [decode_value(value, type) | values]
+      decode_page_content(buffer, row_count, columns, rest, [values | acc])
+    end
+  end
+
+  defp decode_value(nil, _type), do: nil
+
+  defp decode_value(<<value>>, :boolean), do: value != 0
+  defp decode_value(<<value::signed>>, :tinyint), do: value
+  defp decode_value(<<value::16-signed>>, :smallint), do: value
+
+  defp decode_value(<<value::64>>, {:time, [format]}) do
+    case format do
+      :time -> Proto.time_from_nanoseconds(value)
+      :integer -> value
+    end
+  end
+
+  defp decode_value(<<value::64-signed>>, :bigint), do: value
+  defp decode_value(<<value::64-signed>>, :counter), do: value
+
+  defp decode_value(<<value::64-signed>>, {:timestamp, [format]}) do
+    case format do
+      :datetime -> DateTime.from_unix!(value, :millisecond)
+      :integer -> value
+    end
+  end
+
+  defp decode_value(<<value::32>>, {:date, [format]}) do
+    unix_days = value - @unix_epoch_days
+
+    case format do
+      :date -> Proto.date_from_unix_days(unix_days)
+      :integer -> unix_days
+    end
+  end
+
+  defp decode_value(<<value::32-signed>>, :int), do: value
+  defp decode_value(<<value::64-float>>, :double), do: value
+  defp decode_value(<<value::32-float>>, :float), do: value
+
+  defp decode_value(<<data::4-bytes>>, :inet) do
+    <<n1, n2, n3, n4>> = data
+    {n1, n2, n3, n4}
+  end
+
+  defp decode_value(<<data::16-bytes>>, :inet) do
+    <<n1::16, n2::16, n3::16, n4::16, n5::16, n6::16, n7::16, n8::16>> = data
+    {n1, n2, n3, n4, n5, n6, n7, n8}
+  end
+
+  defp decode_value(<<value::16-bytes>>, {uuid_type, [format]})
+       when uuid_type in [:uuid, :timeuuid] do
+    Proto.decode_uuid(value, format)
+  end
+
+  defp decode_value(<<scale::32-signed, data::bits>>, {:decimal, [format]}) do
+    value = decode_value(data, :varint)
+
+    case format do
+      :tuple ->
+        {value, scale}
+
+      :decimal ->
+        sign = if(value >= 0, do: 1, else: -1)
+        Decimal.new(sign, _coefficient = abs(value), _exponent = -scale)
+    end
+  end
+
+  defp decode_value(<<count::32-signed, data::bits>>, {:list, [type]}) do
+    decode_value_list(data, count, type, [])
+  end
+
+  defp decode_value(<<count::32-signed, data::bits>>, {:map, [key_type, value_type]}) do
+    decode_value_map_key(data, count, key_type, value_type, [])
+  end
+
+  defp decode_value(<<count::32-signed, data::bits>>, {:set, [type]}) do
+    data
+    |> decode_value_list(count, type, [])
+    |> MapSet.new()
+  end
+
+  defp decode_value(<<value::bits>>, :ascii), do: value
+  defp decode_value(<<value::bits>>, :blob), do: value
+  defp decode_value(<<value::bits>>, :varchar), do: value
+
+  # For legacy compatibility reasons, most non-string types support
+  # "empty" values (that is a value with zero length).
+  # An empty value is distinct from NULL, which is encoded with a negative length.
+  defp decode_value(<<>>, _type), do: nil
+
+  defp decode_value(<<data::bits>>, {:udt, fields}) do
+    decode_value_udt(data, fields, [])
+  end
+
+  defp decode_value(<<data::bits>>, {:tuple, types}) do
+    decode_value_tuple(data, types, [])
+  end
+
+  defp decode_value(<<data::bits>>, :varint) do
+    size = bit_size(data)
+    <<value::size(size)-signed>> = data
+    value
+  end
+
+  defp decode_value_udt(<<>>, fields, acc) do
+    for {field_name, _} <- fields, into: Map.new(acc), do: {field_name, nil}
+  end
+
+  defp decode_value_udt(<<buffer::bits>>, [{field_name, [field_type]} | rest], acc) do
+    decode_from_proto_type(value <- buffer, "[value]") do
+      value = decode_value(value, field_type)
+      decode_value_udt(buffer, rest, [{field_name, value} | acc])
+    end
+  end
+
+  defp decode_value_list(<<>>, 0, _type, acc) do
+    Enum.reverse(acc)
+  end
+
+  defp decode_value_list(<<buffer::bits>>, count, type, acc) do
+    decode_from_proto_type(item <- buffer, "[value]") do
+      item = decode_value(item, type)
+      decode_value_list(buffer, count - 1, type, [item | acc])
+    end
+  end
+
+  defp decode_value_map_key(<<>>, 0, _key_type, _value_type, acc) do
+    Map.new(acc)
+  end
+
+  defp decode_value_map_key(<<buffer::bits>>, count, key_type, value_type, acc) do
+    decode_from_proto_type(key <- buffer, "[value]") do
+      key = decode_value(key, key_type)
+      decode_value_map_value(buffer, count, key_type, value_type, [key | acc])
+    end
+  end
+
+  defp decode_value_map_value(<<buffer::bits>>, count, key_type, value_type, [key | acc]) do
+    decode_from_proto_type(value <- buffer, "[value]") do
+      value = decode_value(value, value_type)
+      decode_value_map_key(buffer, count - 1, key_type, value_type, [{key, value} | acc])
+    end
+  end
+
+  defp decode_value_tuple(<<buffer::bits>>, [type | types], acc) do
+    decode_from_proto_type(item <- buffer, "[value]") do
+      item = decode_value(item, type)
+      decode_value_tuple(buffer, types, [item | acc])
+    end
+  end
+
+  defp decode_value_tuple(<<>>, [], acc) do
+    acc |> Enum.reverse() |> List.to_tuple()
+  end
+
+  defp decode_columns(<<buffer::bits>>, 0, _table_spec, _atom_keys?, acc) do
+    {Enum.reverse(acc), buffer}
+  end
+
+  defp decode_columns(<<buffer::bits>>, column_count, nil, atom_keys?, acc) do
+    decode_from_proto_type(keyspace <- buffer, "[string]")
+    decode_from_proto_type(table <- buffer, "[string]")
+    decode_from_proto_type(name <- buffer, "[string]")
+    name = if atom_keys?, do: String.to_atom(name), else: name
+    {type, buffer} = decode_type(buffer)
+    entry = {keyspace, table, name, type}
+    decode_columns(buffer, column_count - 1, nil, atom_keys?, [entry | acc])
+  end
+
+  defp decode_columns(<<buffer::bits>>, column_count, table_spec, atom_keys?, acc) do
+    {keyspace, table} = table_spec
+    decode_from_proto_type(name <- buffer, "[string]")
+    name = if atom_keys?, do: String.to_atom(name), else: name
+    {type, buffer} = decode_type(buffer)
+    entry = {keyspace, table, name, type}
+    decode_columns(buffer, column_count - 1, table_spec, atom_keys?, [entry | acc])
+  end
+
+  defp decode_type(<<0x0001::16, buffer::bits>>) do
+    {:ascii, buffer}
+  end
+
+  defp decode_type(<<0x0002::16, buffer::bits>>) do
+    {:bigint, buffer}
+  end
+
+  defp decode_type(<<0x0003::16, buffer::bits>>) do
+    {:blob, buffer}
+  end
+
+  defp decode_type(<<0x0004::16, buffer::bits>>) do
+    {:boolean, buffer}
+  end
+
+  defp decode_type(<<0x0005::16, buffer::bits>>) do
+    {:counter, buffer}
+  end
+
+  defp decode_type(<<0x0006::16, buffer::bits>>) do
+    {:decimal, buffer}
+  end
+
+  defp decode_type(<<0x0007::16, buffer::bits>>) do
+    {:double, buffer}
+  end
+
+  defp decode_type(<<0x0008::16, buffer::bits>>) do
+    {:float, buffer}
+  end
+
+  defp decode_type(<<0x0009::16, buffer::bits>>) do
+    {:int, buffer}
+  end
+
+  defp decode_type(<<0x000B::16, buffer::bits>>) do
+    {:timestamp, buffer}
+  end
+
+  defp decode_type(<<0x000C::16, buffer::bits>>) do
+    {:uuid, buffer}
+  end
+
+  defp decode_type(<<0x000D::16, buffer::bits>>) do
+    {:varchar, buffer}
+  end
+
+  defp decode_type(<<0x000E::16, buffer::bits>>) do
+    {:varint, buffer}
+  end
+
+  defp decode_type(<<0x000F::16, buffer::bits>>) do
+    {:timeuuid, buffer}
+  end
+
+  defp decode_type(<<0x0010::16, buffer::bits>>) do
+    {:inet, buffer}
+  end
+
+  defp decode_type(<<0x0011::16, buffer::bits>>) do
+    {:date, buffer}
+  end
+
+  defp decode_type(<<0x0012::16, buffer::bits>>) do
+    {:time, buffer}
+  end
+
+  defp decode_type(<<0x0013::16, buffer::bits>>) do
+    {:smallint, buffer}
+  end
+
+  defp decode_type(<<0x0014::16, buffer::bits>>) do
+    {:tinyint, buffer}
+  end
+
+  defp decode_type(<<0x0020::16, buffer::bits>>) do
+    {type, buffer} = decode_type(buffer)
+    {{:list, [type]}, buffer}
+  end
+
+  defp decode_type(<<0x0021::16, buffer::bits>>) do
+    {key_type, buffer} = decode_type(buffer)
+    {value_type, buffer} = decode_type(buffer)
+    {{:map, [key_type, value_type]}, buffer}
+  end
+
+  defp decode_type(<<0x0022::16, buffer::bits>>) do
+    {type, buffer} = decode_type(buffer)
+    {{:set, [type]}, buffer}
+  end
+
+  defp decode_type(<<0x0030::16, buffer::bits>>) do
+    decode_from_proto_type(_keyspace <- buffer, "[string]")
+    decode_from_proto_type(_name <- buffer, "[string]")
+    <<count::16, buffer::bits>> = buffer
+    decode_type_udt(buffer, count, [])
+  end
+
+  defp decode_type(<<0x0031::16, count::16, buffer::bits>>) do
+    decode_type_tuple(buffer, count, [])
+  end
+
+  defp decode_type_udt(<<buffer::bits>>, 0, acc) do
+    {{:udt, Enum.reverse(acc)}, buffer}
+  end
+
+  defp decode_type_udt(<<buffer::bits>>, count, acc) do
+    decode_from_proto_type(field_name <- buffer, "[string]")
+    {field_type, buffer} = decode_type(buffer)
+    decode_type_udt(buffer, count - 1, [{field_name, [field_type]} | acc])
+  end
+
+  defp decode_type_tuple(<<buffer::bits>>, 0, acc) do
+    {{:tuple, Enum.reverse(acc)}, buffer}
+  end
+
+  defp decode_type_tuple(<<buffer::bits>>, count, acc) do
+    {type, buffer} = decode_type(buffer)
+    decode_type_tuple(buffer, count - 1, [type | acc])
+  end
+end

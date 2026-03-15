@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCart } from '../context/CartContext';
-import { getProducts } from '../services/shopify';
+import { getProducts } from '../services/jescore';
 import { chatWithAI } from '../services/ai';
 import Fuse from 'fuse.js';
 

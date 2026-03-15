@@ -45,6 +45,20 @@ export async function POST(request) {
         // All contributors (creator + selected friends, NOT the recipient)
         const allContributors = [creatorId, ...participantIds.filter(id => id !== creatorId)];
 
+        // Fetch recipient's shipping address SERVER-SIDE (never exposed to contributors)
+        let recipientShippingAddress = null;
+        try {
+            const recipientProfile = await db.queryOne(
+                'SELECT shipping_address FROM profiles WHERE id = $1',
+                [recipientId]
+            );
+            if (recipientProfile?.shipping_address) {
+                recipientShippingAddress = recipientProfile.shipping_address;
+            }
+        } catch (e) {
+            // Column may not exist yet
+        }
+
         const result = await db.transaction(async (client) => {
             // 1. Create the bag
             const bagResult = await client.query(
@@ -74,13 +88,21 @@ export async function POST(request) {
                 );
             }
 
-            // 3. Create a gift record linking to this bag
+            // 3. Create a gift record linking to this bag (with recipient's address stored server-side)
             const giftRef = `vaca_gift_${Date.now()}`;
-            await client.query(
-                `INSERT INTO gifts (sender_id, recipient_id, product_handle, product_title, product_image, amount, currency, bag_id, payment_external_ref, message)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-                [creatorId, recipientId, productHandle, productTitle || '', productImage || '', goalAmount, currency, bag.id, giftRef, message || null]
-            );
+            try {
+                await client.query(
+                    `INSERT INTO gifts (sender_id, recipient_id, product_handle, product_title, product_image, amount, currency, bag_id, payment_external_ref, message, shipping_address)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                    [creatorId, recipientId, productHandle, productTitle || '', productImage || '', goalAmount, currency, bag.id, giftRef, message || null, recipientShippingAddress ? JSON.stringify(recipientShippingAddress) : null]
+                );
+            } catch (colErr) {
+                await client.query(
+                    `INSERT INTO gifts (sender_id, recipient_id, product_handle, product_title, product_image, amount, currency, bag_id, payment_external_ref, message)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                    [creatorId, recipientId, productHandle, productTitle || '', productImage || '', goalAmount, currency, bag.id, giftRef, message || null]
+                );
+            }
 
             // 4. Get recipient name for the chat name
             const recipient = await client.query('SELECT name FROM profiles WHERE id = $1', [recipientId]);

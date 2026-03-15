@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
-import { createShopifyCheckout, getProductVariantId } from '../services/shopify';
+import { createJesCheckout, openWompiCheckout, getProductVariantId } from '../services/jescore';
 
 const CartContext = createContext();
 
@@ -16,7 +16,7 @@ export function CartProvider({ children }) {
     const [loading, setLoading] = useState(false);
 
     // ==========================================
-    // FETCH CART FROM RDS
+    // FETCH CART FROM JES Core (RDS)
     // ==========================================
     const fetchCart = useCallback(async () => {
         if (!isLoggedIn || !user?.id) {
@@ -48,7 +48,7 @@ export function CartProvider({ children }) {
             return;
         }
 
-        // Fetch variant ID if needed
+        // Resolve variant ID from JES Core
         let variantId = product.variantId;
         if (!variantId && product.handle) {
             const variantData = await getProductVariantId(product.handle);
@@ -77,18 +77,20 @@ export function CartProvider({ children }) {
             }];
         });
 
-        // Show toast immediately
+        // Show toast immediately (optimistic)
         showToast('Producto añadido al carrito 🛒', 'success');
         setIsCartOpen(true);
 
-        // Persist to RDS
+        // Persist to RDS via Next.js API route → JES Core
         try {
             await fetch('/api/cart', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     productHandle: product.handle,
-                    quantity: 1
+                    variantId,
+                    quantity: 1,
+                    isGift,
                 })
             });
         } catch (error) {
@@ -146,7 +148,15 @@ export function CartProvider({ children }) {
     const cartCount = cart.reduce((total, item) => total + (item.quantity || 1), 0);
 
     const cartSubtotal = cart.reduce((total, item) => {
-        const price = parseFloat(item.priceRange?.minVariantPrice?.amount || item.price?.replace(/[$.]/g, '') || 0);
+        // Support both JES Core format (priceRaw in centavos) and legacy display price
+        let price = 0;
+        if (item.priceRaw) {
+            // JES Core: centavos → pesos
+            price = item.priceRaw / 100;
+        } else if (item.price) {
+            // Legacy: parse display price string "$120.000" → 120000
+            price = parseFloat(String(item.price).replace(/[$.,\s]/g, '')) || 0;
+        }
         return total + (price * (item.quantity || 1));
     }, 0);
 
@@ -170,36 +180,109 @@ export function CartProvider({ children }) {
     }, []);
 
     // ==========================================
-    // CHECKOUT
+    // CHECKOUT — JES Core → Wompi
     // ==========================================
     const startCheckout = async () => {
         if (cart.length === 0) return;
+        if (!isLoggedIn || !user?.id) {
+            showToast('Inicia sesión para proceder con la compra', 'info');
+            return;
+        }
 
         setIsCheckingOut(true);
 
         try {
+            // 1. Resolve variant IDs for all cart items
             const itemsWithVariants = await Promise.all(
                 cart.map(async (item) => {
-                    if (item.variantId) {
-                        return { variantId: item.variantId, quantity: item.quantity || 1 };
+                    let variantId = item.variantId;
+                    if (!variantId && (item.product_handle || item.handle)) {
+                        const variantData = await getProductVariantId(item.product_handle || item.handle);
+                        variantId = variantData?.variantId;
                     }
-                    const variantData = await getProductVariantId(item.product_handle || item.handle);
                     return {
-                        variantId: variantData?.variantId,
-                        quantity: item.quantity || 1
+                        variantId,
+                        quantity: item.quantity || 1,
+                        isGift: item.isGift || false,
+                        giftMessage: item.giftMessage || null,
                     };
                 })
             );
 
-            const result = await createShopifyCheckout(itemsWithVariants);
-            if (result?.checkoutUrl) {
-                window.location.href = result.checkoutUrl;
-            } else {
-                showToast('No se pudo crear el checkout. Intenta de nuevo.', 'error');
+            // Filter out items without variant IDs
+            const validItems = itemsWithVariants.filter(i => i.variantId);
+            if (validItems.length === 0) {
+                showToast('No se pudieron resolver los productos. Intenta de nuevo.', 'error');
+                return;
             }
+
+            // 2. Create order in JES Core (reserves inventory atomically)
+            const result = await createJesCheckout({
+                customerId: user.id,
+                items: validItems,
+                shippingAddress: user.shippingAddress || {},
+                customerNotes: '',
+            });
+
+            if (!result?.redirectInfo) {
+                showToast('No se pudo crear la orden. Intenta de nuevo.', 'error');
+                return;
+            }
+
+            // 3. Redirect to Wompi payment widget
+            openWompiCheckout(result.redirectInfo);
+
         } catch (error) {
             console.error('Checkout error:', error);
             showToast('Error al procesar checkout', 'error');
+        } finally {
+            setIsCheckingOut(false);
+        }
+    };
+
+    // ==========================================
+    // BUY NOW — Single product × Wompi
+    // Does NOT touch the cart at all
+    // ==========================================
+    const buyNow = async (product) => {
+        if (!product?.handle) return;
+        if (!isLoggedIn || !user?.id) {
+            showToast('Inicia sesión para comprar', 'info');
+            return;
+        }
+
+        setIsCheckingOut(true);
+        try {
+            // 1. Resolve variant ID
+            let variantId = product.variantId;
+            if (!variantId) {
+                const variantData = await getProductVariantId(product.handle);
+                variantId = variantData?.variantId;
+            }
+
+            if (!variantId) {
+                showToast('No se pudo obtener el producto. Intenta de nuevo.', 'error');
+                return;
+            }
+
+            // 2. Create single-item order in JES Core
+            const result = await createJesCheckout({
+                customerId: user.id,
+                items: [{ variantId, quantity: 1, isGift: false }],
+                shippingAddress: user.shippingAddress || {},
+            });
+
+            if (!result?.redirectInfo) {
+                showToast('No se pudo crear la orden. Intenta de nuevo.', 'error');
+                return;
+            }
+
+            // 3. Redirect to Wompi
+            openWompiCheckout(result.redirectInfo);
+
+        } catch (error) {
+            console.error('Buy now error:', error);
+            showToast('Error al procesar compra', 'error');
         } finally {
             setIsCheckingOut(false);
         }
@@ -219,6 +302,7 @@ export function CartProvider({ children }) {
             isCartOpen,
             setIsCartOpen,
             startCheckout,
+            buyNow,
             isCheckingOut,
             loading
         }}>

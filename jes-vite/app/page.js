@@ -1,17 +1,20 @@
 'use client';
 
 import Hero from '../src/components/Hero';
-import FeaturedSection from '../src/components/CarnavalSection';
-import ProductRowSection from '../src/components/ProductRowSection';
-import SportsZone from '../src/components/SportsZone';
 import Header from '../src/components/Header';
 import Footer from '../src/components/Footer';
 import MobileTabBar from '../src/components/MobileTabBar';
-import SocialFeed from '../src/components/SocialFeed';
+import nextDynamic from 'next/dynamic';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export const dynamic = 'force-dynamic';
+// Below-the-fold: lazy loaded to reduce initial bundle
+const FeaturedSection = nextDynamic(() => import('../src/components/CarnavalSection'));
+const ProductRowSection = nextDynamic(() => import('../src/components/ProductRowSection'));
+const SportsZone = nextDynamic(() => import('../src/components/SportsZone'));
+const MarketplaceCommunitySection = nextDynamic(() => import('../src/components/MarketplaceCommunitySection'));
+const SocialFeed = nextDynamic(() => import('../src/components/SocialFeed'), { ssr: false });
+const MarketplaceBrowse = nextDynamic(() => import('../src/components/MarketplaceBrowse'), { ssr: false });
 
 export default function Home() {
     // Default to 'shop' so the store loads first - ignore saved preference
@@ -46,12 +49,18 @@ export default function Home() {
                     >
                         Shop
                     </button>
+                    <button
+                        onClick={() => handleFeedTypeChange('marketplace')}
+                        className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${feedType === 'marketplace' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'text-zinc-500 dark:text-white/40 hover:text-zinc-900 dark:hover:text-white'}`}
+                    >
+                        Marketplace
+                    </button>
                 </div>
             </div>
 
             <main>
                 <AnimatePresence mode="wait">
-                    {feedType === 'shop' ? (
+                    {feedType === 'shop' && (
                         <motion.div
                             key="shop-feed"
                             initial={{ opacity: 0 }}
@@ -80,6 +89,7 @@ export default function Home() {
                                 viewAllRoute="/apparel"
                             />
                             <SportsZone />
+                            <MarketplaceCommunitySection />
                             <ProductRowSection
                                 title="El Estudio: Vinilos & Arte"
                                 subtitle="Analog Soul"
@@ -91,7 +101,9 @@ export default function Home() {
                             />
                             {/* ... more sections can be added back or lazy loaded */}
                         </motion.div>
-                    ) : (
+                    )}
+
+                    {feedType === 'for-you' && (
                         <motion.div
                             key="social-feed"
                             initial={{ opacity: 0 }}
@@ -101,6 +113,19 @@ export default function Home() {
                             className="pt-32 md:pt-40"
                         >
                             <SocialFeed />
+                        </motion.div>
+                    )}
+
+                    {feedType === 'marketplace' && (
+                        <motion.div
+                            key="marketplace-feed"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.3 }}
+                            className="pt-32 md:pt-40 px-4"
+                        >
+                            <MarketplaceBrowse />
                         </motion.div>
                     )}
                 </AnimatePresence>

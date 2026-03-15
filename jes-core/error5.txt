@@ -1,0 +1,39 @@
+warning: patch `time v0.3.36 (https://github.com/time-rs/time?tag=v0.3.36#3c3c546a)` was not used in the crate graph
+help: Check that the patched package version and available features are compatible
+      with the dependency requirements. If the patch has a different version from
+      what is locked in the Cargo.lock file, run `cargo update` to use the new
+      version. This may also occur with an optional dependency that is not enabled.
+   Compiling tokio-macros v2.6.1
+   Compiling serde_derive v1.0.228
+   Compiling synstructure v0.13.2
+   Compiling tracing-attributes v0.1.31
+   Compiling zerovec-derive v0.11.2
+   Compiling futures-macro v0.3.32
+   Compiling displaydoc v0.2.5
+    Checking ring v0.17.14
+   Compiling aws-lc-sys v0.38.0
+   Compiling rustls v0.21.12
+    Checking spki v0.6.0
+   Compiling rustls v0.23.37
+   Compiling writeable v0.6.2
+   Compiling crossbeam-utils v0.8.21
+    Checking pkcs8 v0.9.0
+    Checking socket2 v0.5.10
+    Checking libc v0.2.183
+    Checking ppv-lite86 v0.2.21
+    Checking crypto-bigint v0.4.9
+    Checking ff v0.12.1
+   Compiling zerofrom-derive v0.1.6
+   Compiling yoke-derive v0.8.1
+    Checking tokio v1.50.0
+   Compiling zerocopy v0.8.42
+    Checking futures-util v0.3.32
+    Checking sync_wrapper v1.0.2
+    Checking base16ct v0.1.1
+error: failed to remove C:\Users\vango\OneDrive\Documents\probandoanti\jes-core\target\debug\deps\tracing_attributes-806ca56c9e4188e3.tracing_attributes.d9054a3edf78a666-cgu.15.rcgu.o: El proceso no tiene acceso al archivo porque está siendo utilizado por otro proceso. (os error 32)
+
+error: could not compile `tracing-attributes` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: failed to remove C:\Users\vango\OneDrive\Documents\probandoanti\jes-core\target\debug\deps\yoke_derive-f0fcf6cc50a756e3.yoke_derive.a3c757ad9ec62d46-cgu.05.rcgu.o: El proceso no tiene acceso al archivo porque está siendo utilizado por otro proceso. (os error 32)
+
+error: could not compile `yoke-derive` (lib) due to 1 previous error

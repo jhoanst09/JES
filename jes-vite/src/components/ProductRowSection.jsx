@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import ProductCard from './ProductCard';
-import { getCollectionProducts, getProducts } from '../services/shopify';
+import { getCollectionProducts, getProducts } from '../services/jescore';
 
 export default function ProductRowSection({
     title,

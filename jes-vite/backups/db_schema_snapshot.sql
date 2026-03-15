@@ -1,0 +1,32 @@
+-- =====================================================
+-- DB SCHEMA SNAPSHOT — Pre-Marketplace Backup
+-- Generated: 2026-02-13
+-- Purpose: Reference of all tables before marketplace changes
+-- =====================================================
+-- This file documents the existing schema for rollback reference.
+
+-- Tables in the database:
+-- 1.  users (id UUID PK, email, password_hash, name, username, bio, avatar_url, nationality, city, role, created_at, updated_at)
+-- 2.  social_posts (id UUID PK, user_id FK→users, content, media_url, media_type, likes_count, comments_count, created_at)
+-- 3.  post_likes (id UUID PK, post_id FK→social_posts, user_id FK→users, created_at, UNIQUE(post_id, user_id))
+-- 4.  post_comments (id UUID PK, post_id FK→social_posts, user_id FK→users, content, parent_id, created_at)
+-- 5.  friendships (id UUID PK, user_id FK→users, friend_id FK→users, status CHECK, created_at, UNIQUE(user_id, friend_id))
+-- 6.  wishlist_items (id UUID PK, user_id FK→users, product_handle, added_at)
+-- 7.  notifications (id UUID PK, user_id FK→users, actor_id FK→users, type, post_id, comment_id, is_read, created_at)
+-- 8.  bags (id UUID PK, ...)
+-- 9.  cart_items (id UUID PK, ...)
+-- 10. conversations (id UUID PK, type, name, image_url, bag_id FK→bags, created_by FK→profiles, last_message_at, created_at)
+-- 11. conversation_participants (id UUID PK, conversation_id FK→conversations, user_id FK→profiles, role, joined_at)
+-- 12. messages (id UUID PK, conversation_id FK→conversations, sender_id FK→profiles, content, content_type, file_url, is_read, created_at)
+-- 13. gifts (...)
+-- 14. profiles (alias/view for users)
+
+-- Migration files applied:
+-- 000_baseline.sql
+-- 010_bags.sql
+-- 011_threaded_comments_notifications.sql
+-- 013_cart_items.sql
+-- 015_conversations_messages.sql
+-- 016_gifts_and_balance.sql
+-- 017_notification_types.sql
+-- 018_username_system.sql

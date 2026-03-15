@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getProducts } from '../services/shopify';
+import { getProducts } from '../services/jescore';
 import Fuse from 'fuse.js';
 
 export default function SearchModal({ isOpen, onClose }) {

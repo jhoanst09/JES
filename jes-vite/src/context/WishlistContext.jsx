@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
-import { getProductsByHandles } from '../services/shopify';
+import { getProductsByHandles } from '../services/jescore';
 import { useRouter } from 'next/navigation';
 
 /**
@@ -58,7 +58,7 @@ export function WishlistProvider({ children }) {
 
         try {
             // Fetch profile
-            const profileRes = await fetch(`/api/profile?userId=${user.id}`);
+            const profileRes = await fetch(`/api/profile?userId=${user.id}&self=true`);
             if (profileRes.ok) {
                 const { profile } = await profileRes.json();
                 if (profile) {
@@ -76,7 +76,27 @@ export function WishlistProvider({ children }) {
                 if (items?.length > 0) {
                     const handles = items.map(i => i.product_handle);
                     const products = await getProductsByHandles(handles);
-                    setWishlist(products);
+
+                    // Build a map of flags from DB items
+                    const flagsMap = {};
+                    items.forEach(i => {
+                        flagsMap[i.product_handle] = {
+                            isLiked: i.is_liked || false,
+                            isPrivate: i.is_private || false,
+                        };
+                    });
+
+                    // Merge flags into the product data
+                    const mergedProducts = products.map(p => ({
+                        ...p,
+                        isLiked: flagsMap[p.handle]?.isLiked || false,
+                        isPrivate: flagsMap[p.handle]?.isPrivate || false,
+                        is_private: flagsMap[p.handle]?.isPrivate || false,
+                    }));
+
+                    setWishlist(mergedProducts);
+                } else {
+                    setWishlist([]);
                 }
             }
 
@@ -99,60 +119,20 @@ export function WishlistProvider({ children }) {
     }, [user?.id]);
 
     // ==========================================
-    // WISHLIST ACTIONS
+    // WISHLIST ACTIONS (Dual-flag: isLiked + isPrivate)
     // ==========================================
-    const addToWishlist = useCallback(async (product) => {
-        if (!user?.id || !product?.handle) return;
 
-        // Optimistic update
-        setWishlist(prev => [...prev, product]);
-        showToast('Añadido a favoritos ❤️', 'success');
-
-        try {
-            await fetch('/api/wishlist', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: user.id,
-                    productHandle: product.handle,
-                }),
-            });
-        } catch (error) {
-            // Rollback
-            setWishlist(prev => prev.filter(p => p.handle !== product.handle));
-            showToast('Error al añadir a favoritos', 'error');
-        }
-    }, [user?.id, showToast]);
-
-    const removeFromWishlist = useCallback(async (productHandle) => {
-        if (!user?.id) return;
-
-        // Optimistic update
-        const prev = wishlist;
-        setWishlist(curr => curr.filter(p => p.handle !== productHandle));
-        showToast('Eliminado de favoritos', 'info');
-
-        try {
-            await fetch('/api/wishlist', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: user.id,
-                    productHandle,
-                }),
-            });
-        } catch (error) {
-            // Rollback
-            setWishlist(prev);
-            showToast('Error al eliminar de favoritos', 'error');
-        }
-    }, [user?.id, wishlist, showToast]);
-
+    // Check if item is LIKED (public favorites — heart icon)
     const isInWishlist = useCallback((handle) => {
-        return (wishlist || []).some(p => p.handle === handle);
+        return (wishlist || []).some(p => p.handle === handle && p.isLiked);
     }, [wishlist]);
 
-    // Toggle wishlist (used by ProductCard)
+    // Check if item is PRIVATE (bookmark icon)
+    const isItemPrivate = useCallback((handle) => {
+        return (wishlist || []).some(p => p.handle === handle && p.isPrivate);
+    }, [wishlist]);
+
+    // Toggle LIKED status (heart icon) — never touches isPrivate
     const toggleWishlist = useCallback(async (product) => {
         if (!user?.id) {
             showToast('Inicia sesión para usar favoritos', 'info');
@@ -161,12 +141,126 @@ export function WishlistProvider({ children }) {
         const handle = product?.handle;
         if (!handle) return;
 
-        if (isInWishlist(handle)) {
-            await removeFromWishlist(handle);
+        const existsInArray = (wishlist || []).some(p => p.handle === handle);
+        const currentlyLiked = isInWishlist(handle);
+        const newLiked = !currentlyLiked;
+
+        // Optimistic update
+        if (existsInArray) {
+            setWishlist(prev => prev.map(p =>
+                p.handle === handle ? { ...p, isLiked: newLiked } : p
+            ));
         } else {
-            await addToWishlist(product);
+            // New entry: liked=true, private stays false
+            setWishlist(prev => [...prev, { ...product, isLiked: true, isPrivate: false }]);
         }
-    }, [user?.id, isInWishlist, addToWishlist, removeFromWishlist, showToast]);
+
+        showToast(newLiked ? 'Añadido a favoritos ❤️' : 'Eliminado de favoritos', newLiked ? 'success' : 'info');
+
+        try {
+            await fetch('/api/wishlist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, productHandle: handle, isLiked: newLiked }),
+            });
+
+            // If both flags are now false, remove from local state too
+            if (!newLiked) {
+                setWishlist(prev => {
+                    const item = prev.find(p => p.handle === handle);
+                    if (item && !item.isPrivate) {
+                        return prev.filter(p => p.handle !== handle);
+                    }
+                    return prev;
+                });
+            }
+        } catch {
+            // Rollback
+            if (existsInArray) {
+                setWishlist(prev => prev.map(p =>
+                    p.handle === handle ? { ...p, isLiked: currentlyLiked } : p
+                ));
+            } else {
+                setWishlist(prev => prev.filter(p => p.handle !== handle));
+            }
+            showToast('Error al actualizar', 'error');
+        }
+    }, [user?.id, wishlist, isInWishlist, showToast]);
+
+    // Toggle PRIVATE status (bookmark icon) — never touches isLiked
+    const togglePrivate = useCallback(async (product) => {
+        if (!user?.id) {
+            showToast('Inicia sesión para guardar en privados', 'info');
+            return;
+        }
+        const handle = product?.handle;
+        if (!handle) return;
+
+        const existsInArray = (wishlist || []).some(p => p.handle === handle);
+        const currentlyPrivate = isItemPrivate(handle);
+        const newPrivate = !currentlyPrivate;
+
+        // Optimistic update
+        if (existsInArray) {
+            setWishlist(prev => prev.map(p =>
+                p.handle === handle ? { ...p, isPrivate: newPrivate, is_private: newPrivate } : p
+            ));
+        } else {
+            // New entry: private=true, liked stays false
+            setWishlist(prev => [...prev, { ...product, isLiked: false, isPrivate: true, is_private: true }]);
+        }
+
+        showToast(newPrivate ? 'Guardado en privados 🔒' : 'Removido de privados', newPrivate ? 'success' : 'info');
+
+        try {
+            await fetch('/api/wishlist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, productHandle: handle, isPrivate: newPrivate }),
+            });
+
+            // If both flags are now false, remove from local state too
+            if (!newPrivate) {
+                setWishlist(prev => {
+                    const item = prev.find(p => p.handle === handle);
+                    if (item && !item.isLiked) {
+                        return prev.filter(p => p.handle !== handle);
+                    }
+                    return prev;
+                });
+            }
+        } catch {
+            // Rollback
+            if (existsInArray) {
+                setWishlist(prev => prev.map(p =>
+                    p.handle === handle ? { ...p, isPrivate: currentlyPrivate, is_private: currentlyPrivate } : p
+                ));
+            } else {
+                setWishlist(prev => prev.filter(p => p.handle !== handle));
+            }
+            showToast('Error al guardar', 'error');
+        }
+    }, [user?.id, wishlist, isItemPrivate, showToast]);
+
+    // Remove from wishlist entirely (trash button)
+    const removeFromWishlist = useCallback(async (productHandle) => {
+        if (!user?.id) return;
+
+        const prev = wishlist;
+        setWishlist(curr => curr.filter(p => p.handle !== productHandle));
+        showToast('Eliminado de favoritos', 'info');
+
+        try {
+            await fetch('/api/wishlist', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, productHandle }),
+            });
+        } catch {
+            setWishlist(prev);
+            showToast('Error al eliminar', 'error');
+        }
+    }, [user?.id, wishlist, showToast]);
 
     // ==========================================
     // PROFILE ACTIONS
@@ -317,10 +411,12 @@ export function WishlistProvider({ children }) {
             orders,
 
             // Wishlist
-            addToWishlist,
             removeFromWishlist,
             isInWishlist,
             toggleWishlist,
+            isItemPrivate,
+            togglePrivate,
+            togglePrivacy: togglePrivate, // alias for profile page
 
             // Profile
             updateProfile,
@@ -356,10 +452,11 @@ const defaultWishlistContext = {
     followRequests: [],
     unreadMessages: 0,
     orders: [],
-    addToWishlist: () => { },
     removeFromWishlist: () => { },
     toggleWishlist: () => { },
     isInWishlist: () => false,
+    isItemPrivate: () => false,
+    togglePrivate: () => { },
     updateProfile: () => { },
     refreshProfile: () => { },
     sendFriendRequest: () => { },

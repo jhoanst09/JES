@@ -22,8 +22,8 @@ export default function ProductDetailsPage({ params }) {
     const [wantsPrivate, setWantsPrivate] = useState(false);
     const [showMirror, setShowMirror] = useState(false);
     const [relatedProducts, setRelatedProducts] = useState([]);
-    const { toggleWishlist, isInWishlist, addToWishlist, isLoggedIn } = useWishlist();
-    const { addToCart, startCheckout, isCheckingOut } = useCart();
+    const { toggleWishlist, isInWishlist, addToWishlist, isLoggedIn, isItemPrivate, togglePrivate } = useWishlist();
+    const { addToCart, buyNow, isCheckingOut } = useCart();
 
     useEffect(() => {
         async function fetchProduct() {
@@ -84,7 +84,8 @@ export default function ProductDetailsPage({ params }) {
         );
     }
 
-    const inWishlist = isInWishlist(product.id);
+    const inWishlist = isInWishlist(product.handle);
+    const productIsPrivate = isItemPrivate(product.handle);
 
     return (
         <div className="min-h-screen bg-white dark:bg-black text-zinc-900 dark:text-white selection:bg-blue-500/30 transition-colors duration-300">
@@ -175,14 +176,13 @@ export default function ProductDetailsPage({ params }) {
                             )}
 
                             <button
-                                onClick={async () => {
-                                    await addToCart({
+                                onClick={() => {
+                                    buyNow({
                                         handle: product.handle,
                                         title: product.title,
                                         price: product.price,
                                         image: product.image || product.images[0]
                                     });
-                                    startCheckout();
                                 }}
                                 disabled={isCheckingOut}
                                 className="w-full py-5 bg-zinc-900 dark:bg-zinc-800 text-white font-black rounded-full border border-black/10 dark:border-white/10 hover:bg-black dark:hover:bg-zinc-700 transition-all text-sm uppercase tracking-widest shadow-xl disabled:opacity-50"
@@ -191,26 +191,40 @@ export default function ProductDetailsPage({ params }) {
                             </button>
 
                             <div className="pt-4 flex flex-col gap-4">
-                                <button
-                                    onClick={() => {
-                                        if (!isLoggedIn) {
-                                            router.push('/profile');
-                                            return;
-                                        }
-                                        if (!inWishlist) {
-                                            addToWishlist(product, wantsPrivate);
-                                        } else {
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => {
+                                            if (!isLoggedIn) {
+                                                router.push('/profile');
+                                                return;
+                                            }
                                             toggleWishlist(product);
-                                        }
-                                    }}
-                                    className={`w-full py-5 rounded-full border transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 font-bold ${inWishlist
-                                        ? 'bg-blue-600/10 border-blue-500/50 text-blue-500'
-                                        : 'bg-transparent border-black/10 dark:border-white/10 text-zinc-500 dark:text-white/50 hover:bg-black/5 dark:hover:bg-white/5'
-                                        }`}
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill={inWishlist ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
-                                    {inWishlist ? 'En Lista de Deseos' : 'Añadir a Deseos'}
-                                </button>
+                                        }}
+                                        className={`flex-1 py-5 rounded-full border transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 font-bold ${inWishlist
+                                            ? 'bg-red-500/10 border-red-500/50 text-red-500'
+                                            : 'bg-transparent border-black/10 dark:border-white/10 text-zinc-500 dark:text-white/50 hover:bg-black/5 dark:hover:bg-white/5'
+                                            }`}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill={inWishlist ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
+                                        {inWishlist ? 'En Favoritos' : 'Me Gusta'}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (!isLoggedIn) {
+                                                router.push('/profile');
+                                                return;
+                                            }
+                                            togglePrivate(product);
+                                        }}
+                                        className={`w-16 py-5 rounded-full border transition-all flex items-center justify-center ${productIsPrivate
+                                            ? 'bg-zinc-800 border-zinc-600 text-white'
+                                            : 'border-black/10 dark:border-white/10 text-zinc-500 dark:text-white/50 hover:bg-black/5 dark:hover:bg-white/5'
+                                            }`}
+                                        title={productIsPrivate ? 'Quitar de privados' : 'Guardar en privados'}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={productIsPrivate ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

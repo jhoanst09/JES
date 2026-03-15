@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { getCollectionProducts, getProducts } from '../services/shopify';
+import { getCollectionProducts, getProducts } from '../services/jescore';
 import ProductCard from './ProductCard';
 
 export default function GadgetsSection() {

@@ -12,10 +12,14 @@ export async function GET(request) {
         const query = searchParams.get('query');
         const excludeId = searchParams.get('excludeId');
 
-        // 1. Single User Profile
+        // 1. Single User Profile (shipping_address only returned with self=true for own profile)
         if (userId && !query) {
+            const isSelf = searchParams.get('self') === 'true';
+            const columns = isSelf
+                ? 'id, email, name, username, avatar_url, bio, nationality, city, occupation, interest_tags, shipping_address'
+                : 'id, email, name, username, avatar_url, bio, nationality, city, occupation, interest_tags';
             const profile = await db.queryOne(
-                'SELECT id, email, name, username, avatar_url, bio, nationality, city FROM profiles WHERE id = $1',
+                `SELECT ${columns} FROM profiles WHERE id = $1`,
                 [userId]
             );
             return NextResponse.json({ profile: profile || null });
@@ -49,7 +53,7 @@ export async function GET(request) {
 
 export async function PUT(request) {
     try {
-        const { userId, name, bio, avatar_url, nationality, city } = await request.json();
+        const { userId, name, bio, avatar_url, nationality, city, occupation, interest_tags, shipping_address } = await request.json();
 
         if (!userId) {
             return NextResponse.json({ error: 'userId required' }, { status: 400 });
@@ -62,10 +66,13 @@ export async function PUT(request) {
                 avatar_url = COALESCE($4, avatar_url),
                 nationality = COALESCE($5, nationality),
                 city = COALESCE($6, city),
+                occupation = COALESCE($7, occupation),
+                interest_tags = COALESCE($8::jsonb, interest_tags),
+                shipping_address = COALESCE($9::jsonb, shipping_address),
                 updated_at = NOW()
              WHERE id = $1
-             RETURNING id, email, name, username, avatar_url, bio`,
-            [userId, name, bio, avatar_url, nationality, city]
+             RETURNING id, email, name, username, avatar_url, bio, occupation, interest_tags, shipping_address`,
+            [userId, name, bio, avatar_url, nationality, city, occupation || null, interest_tags ? JSON.stringify(interest_tags) : null, shipping_address ? JSON.stringify(shipping_address) : null]
         );
 
         return NextResponse.json({ profile });

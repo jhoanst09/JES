@@ -29,6 +29,10 @@ pub struct AppState {
     pub jwt: Arc<JwtService>,
     pub s3: Option<S3Client>,
     pub s3_bucket: Option<String>,
+    // Wompi Payment Gateway (Persona Natural)
+    pub wompi_public_key: String,
+    pub wompi_events_secret: String,
+    pub frontend_url: String,
 }
 
 #[tokio::main]
@@ -97,6 +101,12 @@ async fn main() {
         jwt,
         s3,
         s3_bucket,
+        wompi_public_key: std::env::var("WOMPI_PUBLIC_KEY")
+            .unwrap_or_else(|_| "pub_test_placeholder".to_string()),
+        wompi_events_secret: std::env::var("WOMPI_EVENTS_SECRET")
+            .unwrap_or_else(|_| "test_events_secret".to_string()),
+        frontend_url: std::env::var("FRONTEND_URL")
+            .unwrap_or_else(|_| "https://jes.com.co".to_string()),
     };
 
     // Build router
@@ -117,9 +127,19 @@ async fn main() {
         .route("/api/notifications/:user_id", get(routes::notification::get_notifications))
         .route("/api/notifications", post(routes::notification::create_notification))
         .route("/api/notifications/mark-read", post(routes::notification::mark_read))
-        .route("/api/notifications/:user_id/unread-count", get(routes::notification::unread_count))
         // Health check
         .route("/health", get(routes::health::check))
+        // Payment routes (Wompi)
+        .route("/api/payments/wompi/webhook", post(routes::payments::handle_wompi_webhook))
+        .route("/api/payments/create-checkout", post(routes::payments::create_checkout))
+        // Product routes (replaces Shopify Storefront API)
+        .route("/api/products", get(routes::products::list_products))
+        .route("/api/products", post(routes::products::create_product))
+        .route("/api/products/batch", post(routes::products::get_products_batch))
+        .route("/api/products/:handle", get(routes::products::get_product))
+        // Order routes
+        .route("/api/orders", get(routes::products::list_orders))
+        .route("/api/orders/:id/status", get(routes::products::get_order_status))
         // Middleware
         .layer(
             CorsLayer::new()

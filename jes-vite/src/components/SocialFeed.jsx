@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useWishlist } from '../context/WishlistContext';
 import Link from 'next/link';
+import MarketplaceProductCard from './MarketplaceProductCard';
 
 /**
  * SocialFeed - Clean AWS Architecture
@@ -233,7 +234,7 @@ const CommentSection = ({ postId, currentUserId, authorName }) => {
 // ==========================================
 const PostCard = memo(({ post, currentUserId, onLike, onDelete, friendIds, sentRequestIds, onSendFriendRequest }) => {
     const [likes, setLikes] = useState(parseInt(post.likes_count) || 0);
-    const [liked, setLiked] = useState(false);
+    const [liked, setLiked] = useState(post.user_liked === true);
     const [showComments, setShowComments] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const [showReportModal, setShowReportModal] = useState(false);
@@ -383,6 +384,30 @@ const PostCard = memo(({ post, currentUserId, onLike, onDelete, friendIds, sentR
                 )
             }
 
+            {/* Attached Product */}
+            {(() => {
+                const pd = post.product_data ? (typeof post.product_data === 'string' ? JSON.parse(post.product_data) : post.product_data) : null;
+                if (!pd) return null;
+                return (
+                    <div className="mb-4 bg-gradient-to-r from-amber-500/5 via-orange-500/5 to-yellow-500/5 border border-amber-500/15 rounded-2xl p-3 flex items-center gap-3 cursor-pointer hover:border-amber-500/30 transition-all"
+                        onClick={() => window.location.href = `/product/${pd.handle}`}>
+                        {pd.image ? (
+                            <img src={pd.image} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-black/5" />
+                        ) : (
+                            <div className="w-14 h-14 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0 text-xl">🛍️</div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Producto</p>
+                            <p className="text-sm font-bold text-zinc-900 dark:text-white truncate">{pd.title}</p>
+                            {pd.price != null && (
+                                <p className="text-xs font-black text-amber-600">${parseFloat(pd.price).toLocaleString('es-CO')}</p>
+                            )}
+                        </div>
+                        <span className="text-zinc-400 text-lg">›</span>
+                    </div>
+                );
+            })()}
+
             {/* Post Actions */}
             <div className="flex items-center gap-6 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
                 <button
@@ -431,12 +456,18 @@ export default function SocialFeed() {
     const { user, isLoggedIn } = useAuth();
     const { sendFriendRequest } = useWishlist() || {};
     const [posts, setPosts] = useState([]);
+    const [marketplaceProducts, setMarketplaceProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [posting, setPosting] = useState(false);
     const [newPostText, setNewPostText] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
     const [friendIds, setFriendIds] = useState([]);
     const [sentRequestIds, setSentRequestIds] = useState([]);
+    const [selectedProduct, setSelectedProduct] = useState(null);
+    const [showProductPicker, setShowProductPicker] = useState(false);
+    const [productSearch, setProductSearch] = useState('');
+    const [productResults, setProductResults] = useState([]);
+    const [searchingProducts, setSearchingProducts] = useState(false);
     const fileInputRef = useRef(null);
 
     // ==========================================
@@ -444,7 +475,8 @@ export default function SocialFeed() {
     // ==========================================
     const fetchPosts = useCallback(async () => {
         try {
-            const res = await fetch('/api/posts');
+            const url = user?.id ? `/api/posts?viewer_id=${user.id}` : '/api/posts';
+            const res = await fetch(url);
             const { posts } = await res.json();
             setPosts(Array.isArray(posts) ? posts : []);
         } catch (error) {
@@ -454,9 +486,40 @@ export default function SocialFeed() {
         }
     }, []);
 
+    // Fetch marketplace products to inject (personalized if logged in)
+    const fetchMarketplace = useCallback(async () => {
+        try {
+            const url = user?.id
+                ? `/api/marketplace/feed?user_id=${user.id}&limit=10`
+                : '/api/marketplace/feed?limit=10';
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                setMarketplaceProducts(data.products || []);
+            }
+        } catch (err) { /* silent */ }
+    }, [user?.id]);
+
     useEffect(() => {
         fetchPosts();
-    }, [fetchPosts]);
+        fetchMarketplace();
+    }, [fetchPosts, fetchMarketplace]);
+
+    // Build mixed feed: inject marketplace every 5-6 posts
+    const buildMixedFeed = useCallback(() => {
+        if (!posts.length || !marketplaceProducts.length) return posts.map(p => ({ type: 'post', data: p }));
+        const mixed = [];
+        let mpIdx = 0;
+        const interval = Math.min(6, Math.max(5, Math.floor(posts.length / marketplaceProducts.length)));
+        posts.forEach((post, i) => {
+            mixed.push({ type: 'post', data: post });
+            if ((i + 1) % interval === 0 && mpIdx < marketplaceProducts.length) {
+                mixed.push({ type: 'marketplace', data: marketplaceProducts[mpIdx] });
+                mpIdx++;
+            }
+        });
+        return mixed;
+    }, [posts, marketplaceProducts]);
 
     // Fetch friend data once for the logged-in user
     useEffect(() => {
@@ -487,10 +550,37 @@ export default function SocialFeed() {
     }, [user?.id, sendFriendRequest]);
 
     // ==========================================
+    // PRODUCT SEARCH FOR PICKER
+    // ==========================================
+    const searchProducts = useCallback(async (query) => {
+        if (!query.trim()) { setProductResults([]); return; }
+        setSearchingProducts(true);
+        try {
+            const res = await fetch(`/api/products/search?q=${encodeURIComponent(query)}&limit=5`);
+            if (res.ok) {
+                const data = await res.json();
+                setProductResults(data.products || []);
+            }
+        } catch (err) {
+            console.error('Product search error:', err);
+        } finally {
+            setSearchingProducts(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (productSearch) searchProducts(productSearch);
+            else setProductResults([]);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [productSearch, searchProducts]);
+
+    // ==========================================
     // CREATE POST
     // ==========================================
     const handlePost = async () => {
-        if (!user?.id || (!newPostText.trim() && !selectedFile)) return;
+        if (!user?.id || (!newPostText.trim() && !selectedFile && !selectedProduct)) return;
 
         setPosting(true);
         try {
@@ -511,8 +601,19 @@ export default function SocialFeed() {
                     content: newPostText.trim(),
                     mediaUrl,
                     mediaType,
+                    productData: selectedProduct ? {
+                        title: selectedProduct.title,
+                        handle: selectedProduct.handle,
+                        image: selectedProduct.image,
+                        price: selectedProduct.price,
+                    } : null,
                 }),
             });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Error al publicar');
+            }
 
             const { post } = await res.json();
 
@@ -520,9 +621,11 @@ export default function SocialFeed() {
             setPosts(prev => [post, ...prev]);
             setNewPostText('');
             setSelectedFile(null);
+            setSelectedProduct(null);
 
         } catch (error) {
             console.error('Error creating post:', error);
+            alert(`❌ ${error.message || 'Error al crear publicación. Intenta de nuevo.'}`);
         } finally {
             setPosting(false);
         }
@@ -612,13 +715,99 @@ export default function SocialFeed() {
                         </div>
                     )}
 
+                    {/* Attached Product Preview */}
+                    {selectedProduct && (
+                        <div className="mt-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-2xl p-3 flex items-center gap-3">
+                            {selectedProduct.image ? (
+                                <img src={selectedProduct.image} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+                            ) : (
+                                <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center flex-shrink-0 text-lg">🛍️</div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">{selectedProduct.title}</p>
+                                <p className="text-[10px] font-black text-amber-600">${parseFloat(selectedProduct.price).toLocaleString('es-CO')}</p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedProduct(null)}
+                                className="w-7 h-7 bg-black/10 dark:bg-white/10 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white transition-all text-sm"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Product Picker Modal */}
+                    {showProductPicker && (
+                        <div className="mt-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Seleccionar Producto</p>
+                                <button
+                                    onClick={() => { setShowProductPicker(false); setProductSearch(''); setProductResults([]); }}
+                                    className="text-zinc-400 hover:text-zinc-200 text-lg"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            <input
+                                type="text"
+                                value={productSearch}
+                                onChange={(e) => setProductSearch(e.target.value)}
+                                placeholder="Buscar producto..."
+                                className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-amber-500/50 text-zinc-800 dark:text-white"
+                                autoFocus
+                            />
+                            {searchingProducts && (
+                                <div className="flex justify-center py-3">
+                                    <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                                </div>
+                            )}
+                            {productResults.length > 0 && (
+                                <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+                                    {productResults.map(p => (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => {
+                                                setSelectedProduct(p);
+                                                setShowProductPicker(false);
+                                                setProductSearch('');
+                                                setProductResults([]);
+                                            }}
+                                            className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-amber-500/10 transition-all text-left"
+                                        >
+                                            {p.image ? (
+                                                <img src={p.image} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                                            ) : (
+                                                <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">🛍️</div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-bold text-zinc-900 dark:text-white truncate">{p.title}</p>
+                                                <p className="text-[10px] font-bold text-amber-600">${parseFloat(p.price).toLocaleString('es-CO')}</p>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {productSearch && !searchingProducts && productResults.length === 0 && (
+                                <p className="text-center text-zinc-500 text-xs py-3">No se encontraron productos</p>
+                            )}
+                        </div>
+                    )}
+
                     <div className="flex items-center justify-between mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800/50">
-                        <div className="flex gap-4">
+                        <div className="flex gap-3">
                             <button
                                 onClick={() => fileInputRef.current?.click()}
                                 className="w-10 h-10 rounded-xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-sm"
+                                title="Agregar imagen o video"
                             >
                                 🖼️
+                            </button>
+                            <button
+                                onClick={() => setShowProductPicker(!showProductPicker)}
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-sm ${showProductPicker || selectedProduct ? 'bg-amber-500/20 text-amber-600' : 'bg-zinc-50 dark:bg-zinc-800'}`}
+                                title="Agregar producto"
+                            >
+                                🏷️
                             </button>
                             <input
                                 ref={fileInputRef}
@@ -630,7 +819,7 @@ export default function SocialFeed() {
                         </div>
                         <button
                             onClick={handlePost}
-                            disabled={posting || (!newPostText.trim() && !selectedFile)}
+                            disabled={posting || (!newPostText.trim() && !selectedFile && !selectedProduct)}
                             className="px-8 py-3 bg-amber-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
                         >
                             {posting ? 'Publicando...' : 'Publicar'}
@@ -652,17 +841,21 @@ export default function SocialFeed() {
                 </motion.div>
             ) : (
                 <div className="space-y-2">
-                    {posts.map(post => (
-                        <PostCard
-                            key={post.id}
-                            post={post}
-                            currentUserId={user?.id}
-                            onLike={handleLike}
-                            onDelete={handleDelete}
-                            friendIds={friendIds}
-                            sentRequestIds={sentRequestIds}
-                            onSendFriendRequest={handleSendFriendRequest}
-                        />
+                    {buildMixedFeed().map((item, idx) => (
+                        item.type === 'marketplace' ? (
+                            <MarketplaceProductCard key={`mp-${item.data.id}`} product={item.data} index={idx} />
+                        ) : (
+                            <PostCard
+                                key={item.data.id}
+                                post={item.data}
+                                currentUserId={user?.id}
+                                onLike={handleLike}
+                                onDelete={handleDelete}
+                                friendIds={friendIds}
+                                sentRequestIds={sentRequestIds}
+                                onSendFriendRequest={handleSendFriendRequest}
+                            />
+                        )
                     ))}
                 </div>
             )}

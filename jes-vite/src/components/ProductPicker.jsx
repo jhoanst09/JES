@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { getProducts } from '../services/shopify';
+import { getProducts } from '../services/jescore';
 import Image from 'next/image';
 
 export default function ProductPicker({ onSelect, onClose }) {

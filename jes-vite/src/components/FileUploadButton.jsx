@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { searchShopifyProducts, formatProductForChat, isShopifyConfigured } from '@/src/utils/shopify';
+import { getProducts } from '@/src/services/jescore';
 import CreateBagModal from './CreateBagModal';
 
 /**
@@ -36,7 +36,7 @@ const FileUploadButton = memo(function FileUploadButton({
         { id: 'video', label: 'Videos', accept: 'video/*', icon: '🎥' },
         { id: 'file', label: 'Archivos', accept: '*/*', icon: '📁' },
         { id: 'bag', label: 'Crear Bolsa', icon: '🛒', isBag: true },
-        ...(isShopifyConfigured() ? [{ id: 'product', label: 'Producto', icon: '🛍️', isProduct: true }] : [])
+        { id: 'product', label: 'Producto', icon: '🛍️', isProduct: true }
     ];
 
     const handleMenuClick = useCallback((item) => {
@@ -130,7 +130,7 @@ const FileUploadButton = memo(function FileUploadButton({
     }, [onUpload]);
 
     const handleProductSelect = useCallback((product) => {
-        const productUrl = formatProductForChat(product);
+        const productUrl = `shopify://${product.handle}`;
         onProductShare?.(productUrl, product);
         setShowProductPicker(false);
     }, [onProductShare]);
@@ -240,7 +240,7 @@ const FileUploadButton = memo(function FileUploadButton({
 });
 
 /**
- * Shopify Product Picker Modal
+ * JES Product Picker Modal
  */
 function ShopifyProductPicker({ isOpen, onClose, onSelect }) {
     const [query, setQuery] = useState('');
@@ -252,7 +252,7 @@ function ShopifyProductPicker({ isOpen, onClose, onSelect }) {
 
         setLoading(true);
         try {
-            const results = await searchShopifyProducts(query);
+            const results = await getProducts(8);
             setProducts(results);
         } catch (err) {
             console.error('Search error:', err);
@@ -311,14 +311,14 @@ function ShopifyProductPicker({ isOpen, onClose, onSelect }) {
                             className="w-full flex items-center gap-3 p-3 bg-zinc-800/50 rounded-lg hover:bg-zinc-800 transition-colors text-left"
                         >
                             <img
-                                src={product.images?.edges?.[0]?.node?.url || '/placeholder.jpg'}
+                                src={product.image || product.images?.[0] || '/placeholder.jpg'}
                                 alt={product.title}
                                 className="w-12 h-12 rounded object-cover"
                             />
                             <div className="flex-1 min-w-0">
                                 <p className="text-white text-sm truncate">{product.title}</p>
                                 <p className="text-green-400 text-xs">
-                                    ${product.priceRange?.minVariantPrice?.amount}
+                                    {product.price || `$${Math.round((product.priceRaw || 0) / 100).toLocaleString('es-CO')}`}
                                 </p>
                             </div>
                         </button>

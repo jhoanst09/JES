@@ -128,13 +128,28 @@ export function usePresence(currentUserId) {
         };
     }, [currentUserId, setOnline, setOffline]);
 
+    // Set typing indicator for a conversation (3s TTL)
+    const setTyping = useCallback(async (conversationId) => {
+        if (!currentUserId || !conversationId) return;
+        await redis('SET', `typing:${currentUserId}:${conversationId}`, '1', 'EX', 3);
+    }, [currentUserId]);
+
+    // Check if a specific user is typing in a conversation
+    const checkTyping = useCallback(async (userId, conversationId) => {
+        if (!userId || !conversationId) return false;
+        const result = await redis('GET', `typing:${userId}:${conversationId}`);
+        return result !== null;
+    }, []);
+
     return {
         onlineUsers,
         isUserOnline,
         isConnected,
         checkOnline,
         setOnline,
-        setOffline
+        setOffline,
+        setTyping,
+        checkTyping
     };
 }
 

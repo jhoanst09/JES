@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/src/utils/db/postgres';
+import { incrementUnread, clearUnread, setReadState } from '@/src/utils/redis-session';
 
 /**
  * GET /api/messages?conversationId=xxx&limit=50&before=uuid
@@ -82,6 +83,16 @@ export async function POST(request) {
             [conversationId]
         );
 
+        // Increment unread counters in Redis for other participants (non-blocking)
+        db.queryAll(
+            `SELECT user_id FROM conversation_participants WHERE conversation_id = $1 AND user_id != $2`,
+            [conversationId, senderId]
+        ).then(participants => {
+            for (const p of participants) {
+                incrementUnread(p.user_id, conversationId).catch(() => { });
+            }
+        }).catch(() => { });
+
         // Get sender info
         const sender = await db.queryOne(
             `SELECT name, avatar_url FROM profiles WHERE id = $1`,
@@ -114,16 +125,29 @@ export async function PATCH(request) {
             return NextResponse.json({ error: 'conversationId and userId required' }, { status: 400 });
         }
 
-        const result = await db.query(
+        // Get the latest message ID in this conversation
+        const latest = await db.queryOne(
+            `SELECT id FROM messages WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 1`,
+            [conversationId]
+        );
+
+        // Write to Redis (instant) instead of PostgreSQL UPDATE
+        if (latest?.id) {
+            await setReadState(userId, conversationId, latest.id);
+        }
+        await clearUnread(userId, conversationId);
+
+        // Also update PostgreSQL for backwards compatibility (non-blocking)
+        db.query(
             `UPDATE messages 
              SET is_read = true 
              WHERE conversation_id = $1 
                AND sender_id != $2 
                AND is_read = false`,
             [conversationId, userId]
-        );
+        ).catch(() => { });
 
-        return NextResponse.json({ updated: result?.rowCount || 0 });
+        return NextResponse.json({ updated: 'redis', messageId: latest?.id || null });
     } catch (error) {
         console.error('PATCH /api/messages error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });

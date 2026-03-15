@@ -4,9 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { chatWithAI } from '../services/ai';
-import { getProducts } from '../services/shopify';
+import { getProducts } from '../services/jescore';
+import { useAuth } from '../context/AuthContext';
 
 export default function AIAssistant({ isFullScreen = false }) {
+    const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(isFullScreen);
     const [messages, setMessages] = useState([
         { role: 'assistant', content: 'Hola. Soy JARVIS, tu asistente personal de JES Store. ¿En qué puedo ayudarte hoy?' }
@@ -15,6 +17,7 @@ export default function AIAssistant({ isFullScreen = false }) {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [products, setProducts] = useState([]);
+    const [walletBalance, setWalletBalance] = useState(null);
     const scrollRef = useRef(null);
     const pathname = usePathname();
 
@@ -45,6 +48,21 @@ export default function AIAssistant({ isFullScreen = false }) {
         loadContext();
     }, []);
 
+    // Fetch wallet balance for JARVIS context
+    useEffect(() => {
+        if (!user?.id) return;
+        async function loadWallet() {
+            try {
+                const res = await fetch(`/api/balance?user_id=${user.id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setWalletBalance(data.balance);
+                }
+            } catch { /* silent */ }
+        }
+        loadWallet();
+    }, [user?.id]);
+
     useEffect(() => {
         if (isFullScreen) return;
         const handleOpen = () => setIsOpen(true);
@@ -63,6 +81,23 @@ export default function AIAssistant({ isFullScreen = false }) {
         }
     }, [messages]);
 
+    // Execute commands from JARVIS response
+    const executeCommands = (content) => {
+        const cartRegex = /\[ADD_CART:(.+?)\]/g;
+        const removeRegex = /\[REMOVE_CART:(.+?)\]/g;
+        const searchRegex = /\[SEARCH:(.+?)\]/g;
+
+        for (const match of content.matchAll(cartRegex)) {
+            window.dispatchEvent(new CustomEvent('jarvis-add-cart', { detail: { handle: match[1] } }));
+        }
+        for (const match of content.matchAll(removeRegex)) {
+            window.dispatchEvent(new CustomEvent('jarvis-remove-cart', { detail: { handle: match[1] } }));
+        }
+        for (const match of content.matchAll(searchRegex)) {
+            window.dispatchEvent(new CustomEvent('jarvis-search', { detail: { query: match[1] } }));
+        }
+    };
+
     const handleSend = async () => {
         if (!input.trim() || loading) return;
 
@@ -72,11 +107,13 @@ export default function AIAssistant({ isFullScreen = false }) {
         setLoading(true);
 
         try {
-            const response = await chatWithAI([...messages, userMsg], products);
+            const response = await chatWithAI([...messages, userMsg], products, walletBalance);
+            executeCommands(response);
             setMessages(prev => [...prev, { role: 'assistant', content: response }]);
             setLoading(false);
         } catch (error) {
             console.error("Chat error:", error);
+            setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Error de conexión. Verifica que el API key esté configurado en las variables de entorno.' }]);
             setLoading(false);
         }
     };

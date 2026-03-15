@@ -1,112 +1,92 @@
 'use client';
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import { ToastContainer } from '../components/Toast';
+import { createContext, useContext, useCallback } from 'react';
 
 /**
- * JES Notification System — Entire.io Integration
+ * Toast Context — Powered by Sileo
  * 
- * Manages toast notifications with:
- * - Stacking logic (max 5 visible)
- * - Category-based auto-dismiss (info=5s, success=4s, warning=8s, error=manual)
- * - Session tracking for Entire.io checkpoint linking
- * - Optional persistence to jes-core
- * - Burst protection (max 3 per second)
+ * Replaces the old custom toast system with Sileo's SVG-morphing toasts.
+ * Maintains backward compatibility: showToast(message, type) still works.
+ * Also exposes the raw `sileo` controller for advanced usage.
  */
+
+let sileoInstance = null;
+
+// Lazy import sileo to avoid SSR issues
+async function getSileo() {
+    if (sileoInstance) return sileoInstance;
+    const mod = await import('sileo');
+    sileoInstance = mod.sileo;
+    return sileoInstance;
+}
 
 const ToastContext = createContext();
 
-let toastId = 0;
-
-// Burst protection: max notifications per second
-const BURST_LIMIT = 3;
-const BURST_WINDOW_MS = 1000;
+// Auto-dismiss durations per category
+const DURATIONS = {
+    info: { expand: 1200, collapse: 5000 },
+    success: { expand: 1500, collapse: 7000 },
+    warning: { expand: 2000, collapse: 8000 },
+    error: false, // Manual dismiss only
+};
 
 export function ToastProvider({ children }) {
-    const [toasts, setToasts] = useState([]);
-    const burstTimestamps = useRef([]);
-    const sessionLog = useRef([]); // Entire.io session log
-
-    // Clean up object URLs on unmount
-    useEffect(() => {
-        return () => {
-            sessionLog.current = [];
-        };
-    }, []);
-
     /**
-     * Show a toast notification.
-     * 
-     * @param {string} message - Notification message
-     * @param {string} type - Category: 'info' | 'success' | 'warning' | 'error'
-     * @param {object} options - { title, icon, actionUrl, metadata }
+     * showToast(message, type) — Backward-compatible API
      */
-    const showToast = useCallback((message, type = 'success', options = {}) => {
-        // Burst protection
-        const now = Date.now();
-        burstTimestamps.current = burstTimestamps.current.filter(
-            t => now - t < BURST_WINDOW_MS
-        );
-        if (burstTimestamps.current.length >= BURST_LIMIT) {
-            console.warn('[Notifications] Burst limit reached, dropping notification');
-            return;
-        }
-        burstTimestamps.current.push(now);
+    const showToast = useCallback(async (message, type = 'success') => {
+        const sileo = await getSileo();
+        const method = sileo[type] || sileo.info;
 
-        const id = toastId++;
-        const toast = {
-            id,
-            message,
-            type,
-            title: options.title || null,
-            icon: options.icon || null,
-            timestamp: new Date().toISOString(),
-        };
-
-        setToasts(prev => [...prev, toast]);
-
-        // Log to Entire.io session
-        sessionLog.current.push({
-            ...toast,
-            metadata: options.metadata || {},
-            checkpoint: `notif-${id}`,
+        method({
+            title: message,
+            autopilot: DURATIONS[type] ?? DURATIONS.info,
         });
+    }, []);
 
-        // Persist to sessionStorage for Entire.io history
-        try {
-            const existing = JSON.parse(sessionStorage.getItem('jes_notification_log') || '[]');
-            existing.push(toast);
-            // Keep last 100 notifications in session
-            const trimmed = existing.slice(-100);
-            sessionStorage.setItem('jes_notification_log', JSON.stringify(trimmed));
-        } catch (_) {
-            // sessionStorage unavailable (SSR)
+    /**
+     * notify — Rich notification for backend events
+     */
+    const notify = useCallback(async ({ title, description, type = 'info', action, icon, persist = false }) => {
+        const sileo = await getSileo();
+        const method = sileo[type] || sileo.info;
+
+        const options = {
+            title,
+            description,
+            icon,
+            autopilot: persist ? false : (DURATIONS[type] ?? DURATIONS.info),
+        };
+
+        if (action) {
+            options.button = {
+                title: action.label || 'Ver',
+                onClick: action.onClick || (() => { }),
+            };
         }
 
-        return id;
-    }, []);
-
-    const removeToast = useCallback((id) => {
-        setToasts(prev => prev.filter(t => t.id !== id));
+        method(options);
     }, []);
 
     /**
-     * Get the notification session log (Entire.io compatible).
+     * promiseToast — For async operations (payments, uploads, etc.)
      */
-    const getSessionLog = useCallback(() => {
-        return sessionLog.current;
-    }, []);
-
-    /**
-     * Clear all active toasts.
-     */
-    const clearAll = useCallback(() => {
-        setToasts([]);
+    const promiseToast = useCallback(async (promise, states) => {
+        const sileo = await getSileo();
+        return sileo.promise(promise, {
+            loading: { ...states.loading },
+            success: (data) => ({
+                ...(typeof states.success === 'function' ? states.success(data) : states.success),
+            }),
+            error: (err) => ({
+                ...(typeof states.error === 'function' ? states.error(err) : states.error),
+                autopilot: false,
+            }),
+        });
     }, []);
 
     return (
-        <ToastContext.Provider value={{ showToast, removeToast, clearAll, getSessionLog }}>
+        <ToastContext.Provider value={{ showToast, notify, promiseToast }}>
             {children}
-            <ToastContainer toasts={toasts} removeToast={removeToast} />
         </ToastContext.Provider>
     );
 }

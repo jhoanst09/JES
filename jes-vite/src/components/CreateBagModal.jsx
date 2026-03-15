@@ -2,7 +2,7 @@
 import { useState, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createBag, formatBagForChat } from '@/src/utils/bags';
-import { searchShopifyProducts } from '@/src/utils/shopify';
+import { getProducts } from '@/src/services/jescore';
 import { useAuth } from '@/src/context/AuthContext';
 
 /**
@@ -36,7 +36,7 @@ const CreateBagModal = memo(function CreateBagModal({
         if (!searchQuery.trim()) return;
         setSearching(true);
         try {
-            const results = await searchShopifyProducts(searchQuery);
+            const results = await getProducts(8);
             setSearchResults(results);
         } catch (err) {
             console.error('Search error:', err);
@@ -49,8 +49,8 @@ const CreateBagModal = memo(function CreateBagModal({
         setSelectedProduct(product);
         setShopifyHandle(product.handle);
         setName(product.title);
-        setImageUrl(product.images?.edges?.[0]?.node?.url || '');
-        setGoalAmount(product.priceRange?.minVariantPrice?.amount || '');
+        setImageUrl(product.image || product.images?.[0] || '');
+        setGoalAmount(product.priceRaw ? (product.priceRaw / 100).toString() : product.price?.replace(/[$.,\s]/g, '') || '');
         setStep(2);
     }, []);
 
@@ -142,7 +142,7 @@ const CreateBagModal = memo(function CreateBagModal({
                                 className="p-4 bg-white/5 rounded-xl text-center border border-white/10 hover:bg-white/10 transition-colors"
                             >
                                 <span className="text-2xl block mb-2">🛍️</span>
-                                <span className="text-white text-sm">Producto Shopify</span>
+                                <span className="text-white text-sm">Producto JES</span>
                             </button>
                         </div>
 
@@ -155,7 +155,7 @@ const CreateBagModal = memo(function CreateBagModal({
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                    placeholder="Buscar en Shopify..."
+                                    placeholder="Buscar en JES..."
                                     className="flex-1 px-4 py-2 bg-zinc-800 rounded-lg text-white text-sm focus:outline-none"
                                 />
                                 <button
@@ -178,14 +178,14 @@ const CreateBagModal = memo(function CreateBagModal({
                                         className="w-full flex items-center gap-3 p-3 bg-zinc-800/50 rounded-lg hover:bg-zinc-800 transition-colors text-left"
                                     >
                                         <img
-                                            src={product.images?.edges?.[0]?.node?.url || '/placeholder.jpg'}
+                                            src={product.image || product.images?.[0] || '/placeholder.jpg'}
                                             alt={product.title}
                                             className="w-12 h-12 rounded object-cover"
                                         />
                                         <div className="flex-1 min-w-0">
                                             <p className="text-white text-sm truncate">{product.title}</p>
                                             <p className="text-purple-400 text-xs">
-                                                ${product.priceRange?.minVariantPrice?.amount}
+                                                {product.price || `$${Math.round((product.priceRaw || 0) / 100).toLocaleString('es-CO')}`}
                                             </p>
                                         </div>
                                     </button>

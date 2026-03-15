@@ -37,10 +37,14 @@ const GiftModal = memo(function GiftModal({ isOpen, onClose, product }) {
     const [processing, setProcessing] = useState(false);
     const [giftMessage, setGiftMessage] = useState('');
 
-    // Product data
+    // Product data — handles both Shopify API format and flat wishlist format
     const title = product?.title || 'Producto';
-    const imageUrl = product?.images?.edges?.[0]?.node?.url || product?.featuredImage?.url || '/placeholder.jpg';
-    const price = parseFloat(product?.priceRange?.minVariantPrice?.amount || 0);
+    const imageUrl = product?.images?.edges?.[0]?.node?.url || product?.featuredImage?.url || product?.image || '/placeholder.jpg';
+    const price = parseFloat(
+        product?.priceRange?.minVariantPrice?.amount ||
+        (typeof product?.price === 'string' ? product.price.replace(/[^0-9.]/g, '') : product?.price) ||
+        0
+    );
     const currency = product?.priceRange?.minVariantPrice?.currencyCode || 'COP';
     const handle = product?.handle || '';
 
@@ -100,6 +104,7 @@ const GiftModal = memo(function GiftModal({ isOpen, onClose, product }) {
             return [...prev, friend];
         });
     }, []);
+
 
     // Handle Mercado Pago payment
     const handleMercadoPago = async () => {
@@ -549,6 +554,8 @@ const GiftModal = memo(function GiftModal({ isOpen, onClose, product }) {
                                             </span>
                                         </div>
                                     </div>
+
+
 
                                     {/* Gift message */}
                                     <div>

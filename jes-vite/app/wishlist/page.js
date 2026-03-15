@@ -11,11 +11,12 @@ import { useAuth } from '@/src/context/AuthContext';
 import Header from '@/src/components/Header';
 import Footer from '@/src/components/Footer';
 import MobileTabBar from '@/src/components/MobileTabBar';
+import GiftModal from '@/src/components/GiftModal';
 
 export const dynamic = 'force-dynamic';
 
 function WishlistContent() {
-    const { wishlist, session, following, sentFollowRequests, toggleFollow, socialLoading } = useWishlist();
+    const { wishlist, session, following, sentFollowRequests, toggleFollow, socialLoading, addToWishlist, isInWishlist, toggleWishlist, isItemPrivate, togglePrivate } = useWishlist();
     const router = useRouter();
     const { addToCart } = useCart();
     const searchParams = useSearchParams();
@@ -24,6 +25,7 @@ function WishlistContent() {
     const [requesterName, setRequesterName] = useState('Invitado');
     const [loading, setLoading] = useState(false);
     const [vacaLoading, setVacaLoading] = useState(null);
+    const [giftProduct, setGiftProduct] = useState(null);
 
     const sharedHandles = searchParams.get('items')?.split(',') || [];
     const sharedUserId = searchParams.get('user');
@@ -226,9 +228,10 @@ function WishlistContent() {
                                 >
                                     <Link href={`/product/${product.handle}`} className="block aspect-square relative overflow-hidden rounded-[48px] border border-black/5 dark:border-white/5 bg-zinc-50 dark:bg-zinc-900 shadow-xl">
                                         <img
-                                            src={product.image}
+                                            src={product.image || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect fill='%23222' width='400' height='400'/%3E%3Ctext fill='%23666' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='48'%3E📷%3C/text%3E%3C/svg%3E"}
                                             alt={product.title}
                                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000"
+                                            onError={(e) => { e.target.style.background = '#222'; }}
                                         />
                                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-500"></div>
 
@@ -238,11 +241,35 @@ function WishlistContent() {
                                             </div>
                                         )}
 
-                                        <div className="absolute bottom-8 right-8 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500">
-                                            <div className="p-4 bg-white text-black rounded-2xl shadow-2xl">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></svg>
-                                            </div>
-                                        </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                toggleWishlist?.(product);
+                                            }}
+                                            className="absolute bottom-6 right-6 p-3.5 bg-white/90 dark:bg-black/70 backdrop-blur-xl rounded-2xl shadow-2xl opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500 hover:scale-110 active:scale-90 border border-black/5 dark:border-white/10"
+                                            title={isInWishlist?.(product.handle) ? 'Quitar de favoritos' : 'Me gusta'}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={isInWishlist?.(product.handle) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
+                                                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                                            </svg>
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                togglePrivate?.(product);
+                                            }}
+                                            className={`absolute bottom-6 right-20 p-3.5 backdrop-blur-xl rounded-2xl shadow-2xl opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all duration-500 delay-75 hover:scale-110 active:scale-90 border ${isItemPrivate?.(product.handle)
+                                                ? 'bg-zinc-800/90 dark:bg-white/90 text-white dark:text-black border-zinc-600 dark:border-white/20'
+                                                : 'bg-white/90 dark:bg-black/70 border-black/5 dark:border-white/10'
+                                                }`}
+                                            title={isItemPrivate?.(product.handle) ? 'Quitar de privados' : 'Guardar en privados'}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill={isItemPrivate?.(product.handle) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isItemPrivate?.(product.handle) ? 'text-white dark:text-black' : 'text-zinc-700 dark:text-white'}>
+                                                <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+                                            </svg>
+                                        </button>
                                     </Link>
 
                                     <div className="p-8 space-y-6">
@@ -253,37 +280,28 @@ function WishlistContent() {
                                         </div>
 
                                         <div className="flex flex-col gap-3">
-                                            <Link
-                                                href={`/product/${product.handle}`}
+                                            <button
+                                                onClick={() => setGiftProduct(product)}
                                                 className="block w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-2xl text-center text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-500 shadow-xl hover:scale-105 hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-95"
                                             >
                                                 Regalar 🎁
-                                            </Link>
+                                            </button>
 
                                             {isSharedView && (
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <button
-                                                        onClick={() => {
-                                                            addToCart({
-                                                                handle: product.handle,
-                                                                title: product.title,
-                                                                price: product.price,
-                                                                image: product.image
-                                                            });
-                                                            alert('¡Añadido al carrito!');
-                                                        }}
-                                                        className="py-4 bg-blue-600 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all hover:bg-blue-700 shadow-md active:scale-95"
-                                                    >
-                                                        Añadir al Carrito
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleLaVaca(product)}
-                                                        disabled={vacaLoading === product.handle}
-                                                        className="py-4 bg-orange-500/10 text-orange-500 hover:bg-orange-500 hover:text-white rounded-2xl text-center text-[9px] font-black uppercase tracking-widest transition-all border border-orange-500/20 disabled:opacity-50 active:scale-95"
-                                                    >
-                                                        {vacaLoading === product.handle ? '...' : '🤝 Fondo'}
-                                                    </button>
-                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        addToCart({
+                                                            handle: product.handle,
+                                                            title: product.title,
+                                                            price: product.price,
+                                                            image: product.image
+                                                        });
+                                                        alert('¡Añadido al carrito!');
+                                                    }}
+                                                    className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all hover:bg-blue-700 shadow-md active:scale-95"
+                                                >
+                                                    Añadir al Carrito
+                                                </button>
                                             )}
                                         </div>
                                     </div>
@@ -322,6 +340,13 @@ function WishlistContent() {
 
             <Footer />
             <MobileTabBar />
+
+            {/* Gift Modal for Regalar button */}
+            <GiftModal
+                isOpen={!!giftProduct}
+                onClose={() => setGiftProduct(null)}
+                product={giftProduct}
+            />
         </div>
     );
 }

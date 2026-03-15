@@ -10,6 +10,7 @@ import ProductCard from '@/src/components/ProductCard';
 import Header from '@/src/components/Header';
 import Footer from '@/src/components/Footer';
 import MobileTabBar from '@/src/components/MobileTabBar';
+import GiftModal from '@/src/components/GiftModal';
 // import { signOut } from '@/app/auth/actions'; // Replaced by context logout
 
 export default function ProfilePage() {
@@ -46,9 +47,36 @@ export default function ProfilePage() {
     const [tempCity, setTempCity] = useState(userProfile?.city || '');
     const [uploading, setUploading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [giftProduct, setGiftProduct] = useState(null);
     const [searchResults, setSearchResults] = useState([]);
     const [otherUsers, setOtherUsers] = useState([]);
+    const [jesBalance, setJesBalance] = useState(0);
+    const [showAddressForm, setShowAddressForm] = useState(false);
+    const [tempAddress, setTempAddress] = useState({
+        line1: userProfile?.shipping_address?.line1 || '',
+        line2: userProfile?.shipping_address?.line2 || '',
+        city: userProfile?.shipping_address?.city || '',
+        state: userProfile?.shipping_address?.state || '',
+        zip: userProfile?.shipping_address?.zip || '',
+        country: userProfile?.shipping_address?.country || 'Colombia',
+        phone: userProfile?.shipping_address?.phone || '',
+    });
 
+    // Sync address when userProfile loads
+    useEffect(() => {
+        if (userProfile?.shipping_address) {
+            setTempAddress(prev => ({
+                ...prev,
+                line1: userProfile.shipping_address.line1 || '',
+                line2: userProfile.shipping_address.line2 || '',
+                city: userProfile.shipping_address.city || '',
+                state: userProfile.shipping_address.state || '',
+                zip: userProfile.shipping_address.zip || '',
+                country: userProfile.shipping_address.country || 'Colombia',
+                phone: userProfile.shipping_address.phone || '',
+            }));
+        }
+    }, [userProfile?.shipping_address]);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [regUsername, setRegUsername] = useState('');
@@ -84,12 +112,32 @@ export default function ProfilePage() {
         fetchUsers();
     }, [userProfile?.id]);
 
+    useEffect(() => {
+        if (!userProfile?.id) return;
+        async function fetchBalance() {
+            try {
+                const res = await fetch(`/api/balance?user_id=${userProfile.id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setJesBalance(data.balance ?? 0);
+                } else {
+                    setJesBalance(0);
+                }
+            } catch (err) {
+                console.error('Balance fetch error:', err);
+                setJesBalance(0);
+            }
+        }
+        fetchBalance();
+    }, [userProfile?.id]);
+
     const handleSaveProfile = async () => {
         await updateProfile({
             name: tempName,
             bio: tempBio,
             nationality: tempNationality,
-            city: tempCity
+            city: tempCity,
+            shipping_address: tempAddress.line1 ? tempAddress : (userProfile?.shipping_address || null),
         });
         setIsEditing(false);
     };
@@ -170,7 +218,7 @@ export default function ProfilePage() {
     };
 
     const filteredWishlist = (wishlist || []).filter(item =>
-        wishlistFilter === 'public' ? !item.isPrivate : item.isPrivate
+        wishlistFilter === 'public' ? item.isLiked : item.isPrivate
     );
 
     if (!isLoggedIn) {
@@ -429,6 +477,18 @@ export default function ProfilePage() {
                 {/* Profile Header */}
                 <section className="mb-20">
                     <div className="flex flex-col md:flex-row items-center gap-10 bg-zinc-100 dark:bg-zinc-900/30 p-12 rounded-[56px] border border-black/5 dark:border-white/5 backdrop-blur-md relative overflow-hidden group transition-colors duration-300">
+                        {/* JES Coins Badge - top right corner */}
+                        <div className="absolute top-4 right-4 z-10">
+                            <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 backdrop-blur-md border border-amber-500/30 rounded-2xl px-4 py-2 flex items-center gap-2 shadow-lg shadow-amber-500/10">
+                                <span className="text-lg">🪙</span>
+                                <div>
+                                    <p className="text-[8px] font-black uppercase tracking-[0.15em] text-amber-500">JES Coins</p>
+                                    <p className="text-base font-black text-white leading-tight">
+                                        {jesBalance.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                         <div className="relative group/avatar">
                             <div className="w-32 h-32 bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-900 rounded-full flex items-center justify-center text-6xl relative z-10 border border-black/10 dark:border-white/10 shadow-3xl overflow-hidden transition-colors duration-300">
                                 {userProfile.avatar_url ? (
@@ -493,6 +553,82 @@ export default function ProfilePage() {
                                             placeholder="Escribe algo sobre ti..."
                                             className="bg-zinc-200 dark:bg-zinc-800 border border-black/10 dark:border-white/10 rounded-2xl px-6 py-4 text-sm font-medium text-black dark:text-white focus:border-blue-500 outline-none w-full shadow-inner h-24 resize-none transition-colors duration-300"
                                         />
+
+                                        {/* Shipping Address Section */}
+                                        <div className="border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden">
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowAddressForm(!showAddressForm)}
+                                                className="w-full flex items-center justify-between px-6 py-4 bg-zinc-200/50 dark:bg-zinc-800/50 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-lg">📦</span>
+                                                    <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Dirección de envío</span>
+                                                    {userProfile?.shipping_address?.line1 && (
+                                                        <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">✓ Guardada</span>
+                                                    )}
+                                                </div>
+                                                <span className={`text-zinc-400 transition-transform ${showAddressForm ? 'rotate-180' : ''}`}>▼</span>
+                                            </button>
+                                            {showAddressForm && (
+                                                <div className="p-4 space-y-3">
+                                                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Para que tus amigos puedan enviarte regalos 🎁</p>
+                                                    <input
+                                                        type="text"
+                                                        value={tempAddress.line1}
+                                                        onChange={(e) => setTempAddress(prev => ({ ...prev, line1: e.target.value }))}
+                                                        placeholder="Dirección (calle, número, apto)"
+                                                        className="bg-zinc-200 dark:bg-zinc-800 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium text-black dark:text-white focus:border-amber-500 outline-none w-full transition-colors duration-300"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={tempAddress.line2}
+                                                        onChange={(e) => setTempAddress(prev => ({ ...prev, line2: e.target.value }))}
+                                                        placeholder="Barrio / Complemento (opcional)"
+                                                        className="bg-zinc-200 dark:bg-zinc-800 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium text-black dark:text-white focus:border-amber-500 outline-none w-full transition-colors duration-300"
+                                                    />
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <input
+                                                            type="text"
+                                                            value={tempAddress.city}
+                                                            onChange={(e) => setTempAddress(prev => ({ ...prev, city: e.target.value }))}
+                                                            placeholder="Ciudad"
+                                                            className="bg-zinc-200 dark:bg-zinc-800 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium text-black dark:text-white focus:border-amber-500 outline-none w-full transition-colors duration-300"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={tempAddress.state}
+                                                            onChange={(e) => setTempAddress(prev => ({ ...prev, state: e.target.value }))}
+                                                            placeholder="Departamento"
+                                                            className="bg-zinc-200 dark:bg-zinc-800 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium text-black dark:text-white focus:border-amber-500 outline-none w-full transition-colors duration-300"
+                                                        />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <input
+                                                            type="text"
+                                                            value={tempAddress.zip}
+                                                            onChange={(e) => setTempAddress(prev => ({ ...prev, zip: e.target.value }))}
+                                                            placeholder="Código postal"
+                                                            className="bg-zinc-200 dark:bg-zinc-800 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium text-black dark:text-white focus:border-amber-500 outline-none w-full transition-colors duration-300"
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={tempAddress.country}
+                                                            onChange={(e) => setTempAddress(prev => ({ ...prev, country: e.target.value }))}
+                                                            placeholder="País"
+                                                            className="bg-zinc-200 dark:bg-zinc-800 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium text-black dark:text-white focus:border-amber-500 outline-none w-full transition-colors duration-300"
+                                                        />
+                                                    </div>
+                                                    <input
+                                                        type="tel"
+                                                        value={tempAddress.phone}
+                                                        onChange={(e) => setTempAddress(prev => ({ ...prev, phone: e.target.value }))}
+                                                        placeholder="Teléfono (ej: 300 123 4567)"
+                                                        className="bg-zinc-200 dark:bg-zinc-800 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-medium text-black dark:text-white focus:border-amber-500 outline-none w-full transition-colors duration-300"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex gap-2 w-full md:w-auto">
                                         <button
@@ -526,6 +662,12 @@ export default function ProfilePage() {
                                                 )}
                                             </div>
                                             <p className="text-zinc-600 dark:text-zinc-400 font-medium max-w-md pt-4 leading-relaxed transition-colors duration-300">{userProfile.bio || 'Sin biografía aún.'}</p>
+                                            {userProfile.shipping_address?.line1 && (
+                                                <div className="flex items-center gap-1.5 pt-2">
+                                                    <span className="text-xs">📦</span>
+                                                    <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Dirección guardada</span>
+                                                </div>
+                                            )}
                                         </div>
                                         <button
                                             onClick={() => setIsEditing(true)}
@@ -552,6 +694,9 @@ export default function ProfilePage() {
                         </div>
                     </div>
                 </section>
+
+
+
 
                 {/* Main Tabs */}
                 <div className="flex gap-4 md:gap-12 border-b border-white/5 pb-8 overflow-x-auto no-scrollbar scroll-smooth px-2">
@@ -761,7 +906,7 @@ export default function ProfilePage() {
                                     onClick={() => setWishlistFilter('public')}
                                     className={`text-xs font-black uppercase tracking-[0.2em] flex items-center gap-3 whitespace-nowrap transition-all px-4 py-2 rounded-xl ${wishlistFilter === 'public' ? 'text-blue-600 bg-blue-500/10 scale-105' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'}`}
                                 >
-                                    🌍 Públicos ({(wishlist || []).filter(i => !i.isPrivate).length})
+                                    🌍 Públicos ({(wishlist || []).filter(i => i.isLiked).length})
                                     {wishlistFilter === 'public' && <motion.div layoutId="subtab-underline" className="h-0.5 w-full bg-blue-500 absolute -bottom-8 rounded-full" />}
                                 </button>
                                 <button
@@ -787,7 +932,7 @@ export default function ProfilePage() {
                                             </div>
                                             <button
                                                 onClick={() => {
-                                                    const publicHandles = wishlist.filter(i => !i.isPrivate).map(p => p.handle).join(',');
+                                                    const publicHandles = wishlist.filter(i => i.isLiked).map(p => p.handle).join(',');
                                                     const url = `${window.location.origin}/wishlist?items=${publicHandles}`;
                                                     navigator.clipboard.writeText(url);
                                                     alert('¡Link copiado! (Solo incluye los públicos).');
@@ -808,16 +953,16 @@ export default function ProfilePage() {
                                             >
                                                 <Link href={`/product/${product.handle}`} className="block aspect-square relative overflow-hidden rounded-[40px] bg-zinc-50 dark:bg-zinc-900 border border-black/5 dark:border-white/5 shadow-xl">
                                                     <img
-                                                        src={product.image}
+                                                        src={product.image || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect fill='%23222' width='400' height='400'/%3E%3Ctext fill='%23666' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-size='48'%3E📷%3C/text%3E%3C/svg%3E"}
                                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                                                        alt=""
-                                                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594322436404-5a0526db4d13?w=800&q=80'; }}
+                                                        alt={product.title || ''}
+                                                        onError={(e) => { e.target.style.background = '#222'; }}
                                                     />
                                                     <div className="absolute top-6 right-6 flex flex-col gap-2">
                                                         <button
                                                             onClick={(e) => {
-                                                                e.preventDefault();
-                                                                togglePrivacy(product.id || product.db_id);
+                                                                e.stopPropagation();
+                                                                togglePrivacy(product);
                                                             }}
                                                             className="p-3 bg-black/60 backdrop-blur-xl rounded-2xl text-white border border-white/10 hover:scale-110 active:scale-90 transition-all shadow-2xl"
                                                             title={product.isPrivate ? "Hacer público" : "Hacer privado"}
@@ -846,9 +991,12 @@ export default function ProfilePage() {
                                                         <h3 className="font-black text-xl mb-1 tracking-tight leading-tight text-zinc-900 dark:text-white transition-colors duration-300 italic">{product.title}</h3>
                                                         <p className="text-zinc-500 dark:text-zinc-400 font-bold text-base transition-colors duration-300">{product.price}</p>
                                                     </div>
-                                                    <Link href={`/product/${product.handle}`} className="block w-full py-4 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white rounded-2xl text-center font-black text-[10px] uppercase tracking-widest hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black transition-all shadow-md">
+                                                    <button
+                                                        onClick={() => setGiftProduct(product)}
+                                                        className="block w-full py-4 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white rounded-2xl text-center font-black text-[10px] uppercase tracking-widest hover:bg-black dark:hover:bg-white hover:text-white dark:hover:text-black transition-all shadow-md"
+                                                    >
                                                         Regalar 🎁
-                                                    </Link>
+                                                    </button>
                                                 </div>
                                             </motion.div>
                                         ))}
@@ -941,6 +1089,13 @@ export default function ProfilePage() {
 
             <Footer />
             <MobileTabBar />
+
+            {/* Gift Modal for Regalar button */}
+            <GiftModal
+                isOpen={!!giftProduct}
+                onClose={() => setGiftProduct(null)}
+                product={giftProduct}
+            />
         </div>
     );
 }

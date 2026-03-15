@@ -2,8 +2,12 @@
 import { useState, useEffect, memo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getBag, contribute, subscribeToBagProgress, parseBagUrl } from '@/src/utils/bags';
-import { formatPrice } from '@/src/utils/shopify';
 import { useAuth } from '@/src/context/AuthContext';
+
+// Inline price formatter (replaces shopify formatPrice)
+const formatPrice = (amount, currency = 'COP') => {
+    return new Intl.NumberFormat('es-CO', { style: 'currency', currency }).format(amount);
+};
 
 /**
  * BagCard - Displays a shared shopping bag in chat

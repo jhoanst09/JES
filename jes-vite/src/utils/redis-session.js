@@ -393,6 +393,117 @@ export function isRedisConfigured() {
     return !!(url && token);
 }
 
+// ==========================================
+// EPHEMERAL STATES (Discord-style)
+// ==========================================
+
+const TYPING_PREFIX = 'typing:';
+const TYPING_TTL = 5; // 5 seconds auto-expire
+const UNREAD_PREFIX = 'unread:';
+const READSTATE_PREFIX = 'readstate:';
+const READSTATE_TTL = 60 * 60 * 24 * 7; // 7 days
+
+/**
+ * Mark user as typing in a conversation.
+ * Auto-expires after 5 seconds.
+ * @param {string} userId
+ * @param {string} conversationId
+ */
+export async function setTyping(userId, conversationId) {
+    if (!userId || !conversationId) return;
+    const key = `${TYPING_PREFIX}${conversationId}`;
+    await redisCommand('SADD', key, userId);
+    await redisCommand('EXPIRE', key, TYPING_TTL);
+}
+
+/**
+ * Clear typing indicator for a user.
+ * @param {string} userId
+ * @param {string} conversationId
+ */
+export async function clearTyping(userId, conversationId) {
+    if (!userId || !conversationId) return;
+    const key = `${TYPING_PREFIX}${conversationId}`;
+    await redisCommand('SREM', key, userId);
+}
+
+/**
+ * Get all users currently typing in a conversation.
+ * @param {string} conversationId
+ * @returns {Promise<string[]>} Array of user IDs
+ */
+export async function getTypingUsers(conversationId) {
+    if (!conversationId) return [];
+    const key = `${TYPING_PREFIX}${conversationId}`;
+    const result = await redisCommand('SMEMBERS', key);
+    return result || [];
+}
+
+/**
+ * Increment unread count for a user in a conversation.
+ * @param {string} userId - Recipient user
+ * @param {string} conversationId
+ */
+export async function incrementUnread(userId, conversationId) {
+    if (!userId || !conversationId) return;
+    const key = `${UNREAD_PREFIX}${userId}`;
+    await redisCommand('HINCRBY', key, conversationId, '1');
+}
+
+/**
+ * Get all unread counts for a user (all conversations).
+ * @param {string} userId
+ * @returns {Promise<object>} { conversationId: count, ... }
+ */
+export async function getUnreadCounts(userId) {
+    if (!userId) return {};
+    const key = `${UNREAD_PREFIX}${userId}`;
+    const result = await redisCommand('HGETALL', key);
+    if (!result || !Array.isArray(result)) return {};
+    // HGETALL returns [field1, val1, field2, val2, ...]
+    const counts = {};
+    for (let i = 0; i < result.length; i += 2) {
+        counts[result[i]] = parseInt(result[i + 1]) || 0;
+    }
+    return counts;
+}
+
+/**
+ * Clear unread count for a user in a conversation (mark as read).
+ * @param {string} userId
+ * @param {string} conversationId
+ */
+export async function clearUnread(userId, conversationId) {
+    if (!userId || !conversationId) return;
+    const key = `${UNREAD_PREFIX}${userId}`;
+    await redisCommand('HDEL', key, conversationId);
+}
+
+/**
+ * Set the last read message ID for a user in a conversation.
+ * Persists in Redis for 7 days, flushed to PostgreSQL async every 5 min.
+ * @param {string} userId
+ * @param {string} conversationId
+ * @param {string} messageId
+ */
+export async function setReadState(userId, conversationId, messageId) {
+    if (!userId || !conversationId || !messageId) return;
+    const key = `${READSTATE_PREFIX}${userId}:${conversationId}`;
+    await redisCommand('SET', key, messageId, 'EX', READSTATE_TTL);
+}
+
+/**
+ * Get the last read message ID for a user in a conversation.
+ * @param {string} userId
+ * @param {string} conversationId
+ * @returns {Promise<string|null>}
+ */
+export async function getReadState(userId, conversationId) {
+    if (!userId || !conversationId) return null;
+    const key = `${READSTATE_PREFIX}${userId}:${conversationId}`;
+    return await redisCommand('GET', key);
+}
+
 export default {
     // Session
     storeSession,
@@ -414,6 +525,15 @@ export default {
     cacheSet,
     cacheGet,
     cacheDel,
+    // Ephemeral States
+    setTyping,
+    clearTyping,
+    getTypingUsers,
+    incrementUnread,
+    getUnreadCounts,
+    clearUnread,
+    setReadState,
+    getReadState,
     // Utils
     isRedisConfigured,
     redisCommand

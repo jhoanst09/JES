@@ -1,6 +1,10 @@
 const OPENROUTER_MODEL = process.env.NEXT_PUBLIC_OPENROUTER_MODEL || process.env.VITE_OPENROUTER_MODEL || "google/learnlm-1.5-pro-experimental:free";
 
-export async function chatWithAI(messages, productContext = []) {
+export async function chatWithAI(messages, productContext = [], walletBalance = null) {
+    const walletInfo = walletBalance !== null
+        ? `\nSALDO ACTUAL DEL USUARIO: ${walletBalance} JES Coins. Puedes informar al usuario sobre su saldo cuando pregunte.`
+        : '\nNo tienes acceso al saldo del usuario actualmente.';
+
     const systemPrompt = `
 Eres "JARVIS" (Just A Rather Very Intelligent System), el asistente virtual de JES Store.
 
@@ -15,6 +19,8 @@ TUS CAPACIDADES:
 - Ayudar con el carrito de compras
 - Responder preguntas sobre productos, precios y disponibilidad
 - Dar consejos sobre tecnología, moda y música
+- Consultar el saldo de JES Coins del usuario
+${walletInfo}
 
 COMANDOS QUE PUEDES EJECUTAR (el sistema los detectará):
 - Para añadir al carrito: [ADD_CART:handle_del_producto]

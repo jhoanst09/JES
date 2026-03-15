@@ -2,6 +2,7 @@
 import { useState, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useWishlist } from '@/src/context/WishlistContext';
 import { useCart } from '@/src/context/CartContext';
 import GiftModal from './GiftModal';
@@ -26,8 +27,8 @@ const ProductCard = memo(function ProductCard({
     index = 0,
     onBagCreate
 }) {
-    const { toggleWishlist, wishlist } = useWishlist() || {};
-    const { addToCart, startCheckout, isCheckingOut } = useCart() || {};
+    const { toggleWishlist, wishlist, addToWishlist, isItemPrivate, togglePrivate } = useWishlist() || {};
+    const { addToCart, buyNow, isCheckingOut } = useCart() || {};
     const [imageLoaded, setImageLoaded] = useState(false);
     const [showActions, setShowActions] = useState(false);
     const [addedToCart, setAddedToCart] = useState(false);
@@ -42,7 +43,7 @@ const ProductCard = memo(function ProductCard({
     const comparePrice = parseFloat(product?.compareAtPriceRange?.minVariantPrice?.amount || 0);
     const hasDiscount = comparePrice > priceValue;
     const discountPercent = hasDiscount ? Math.round((1 - priceValue / comparePrice) * 100) : 0;
-    const isInWishlist = wishlist?.some(item => item.handle === productHandle);
+    const isInWishlist = wishlist?.some(item => item.handle === productHandle && item.isLiked);
     const available = product?.availableForSale !== false;
 
     // Build product object for cart
@@ -85,9 +86,8 @@ const ProductCard = memo(function ProductCard({
         e.stopPropagation();
         if (!available) return;
 
-        await addToCart?.(productData);
-        startCheckout?.();
-    }, [productData, available, addToCart, startCheckout]);
+        buyNow?.(productData);
+    }, [productData, available, buyNow]);
 
 
 
@@ -96,6 +96,14 @@ const ProductCard = memo(function ProductCard({
         e.stopPropagation();
         toggleWishlist?.(productData);
     }, [productData, toggleWishlist]);
+
+    const handleSavePrivate = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        togglePrivate?.(productData);
+    }, [productData, togglePrivate]);
+
+    const itemIsPrivate = isItemPrivate?.(productHandle);
 
     return (
         <motion.div
@@ -115,16 +123,19 @@ const ProductCard = memo(function ProductCard({
                         <div className="absolute inset-0 bg-zinc-800/50 animate-pulse rounded-2xl" />
                     )}
 
-                    <motion.img
+                    <Image
                         src={imageUrl}
                         alt={title}
-                        loading="lazy"
+                        fill
+                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                        priority={index < 4}
                         onLoad={() => setImageLoaded(true)}
                         onError={(e) => {
                             e.target.src = 'https://images.unsplash.com/photo-1560393464-5c69a73c5770?w=800&q=80';
                         }}
-                        className={`w-full h-full object-cover transition-all duration-700 rounded-2xl ${imageLoaded ? 'opacity-100' : 'opacity-0'
-                            } group-hover:scale-110`}
+                        className={`object-cover transition-all duration-700 rounded-2xl ${
+                            imageLoaded ? 'opacity-100' : 'opacity-0'
+                        } group-hover:scale-110`}
                     />
 
                     {hasDiscount && (
@@ -145,6 +156,15 @@ const ProductCard = memo(function ProductCard({
                         className="absolute top-3 right-3 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-md text-white hover:bg-black/50 hover:scale-110 transition-all"
                     >
                         {isInWishlist ? '❤️' : '🤍'}
+                    </button>
+
+                    {/* Save to Private */}
+                    <button
+                        onClick={handleSavePrivate}
+                        className="absolute top-3 right-14 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 backdrop-blur-md text-white hover:bg-black/50 hover:scale-110 transition-all"
+                        title={itemIsPrivate ? 'Quitar de privados' : 'Guardar en privados'}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill={itemIsPrivate ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" /></svg>
                     </button>
 
                     {/* HOVER: Add to Cart only */}
@@ -229,7 +249,7 @@ export function ChatProductCard({ content }) {
 
     useState(() => {
         if (!handle) return;
-        import('@/src/utils/shopify').then(({ getProductByHandle }) => {
+        import('@/src/services/jescore').then(({ getProductByHandle }) => {
             getProductByHandle(handle)
                 .then(data => {
                     setProduct(data);

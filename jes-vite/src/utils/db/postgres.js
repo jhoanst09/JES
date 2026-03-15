@@ -7,6 +7,23 @@
 
 import { Pool } from 'pg';
 
+// Lazy Redis import to avoid circular deps
+let _redisCommand = null;
+async function getRedisCommand() {
+    if (!_redisCommand) {
+        try {
+            const redis = await import('@/src/utils/redis-session');
+            _redisCommand = redis.default?.redisCommand || redis.redisCommand;
+        } catch { _redisCommand = null; }
+    }
+    return _redisCommand;
+}
+
+// Telemetry: slow query threshold in ms
+const SLOW_QUERY_THRESHOLD_MS = 50;
+const TELEMETRY_KEY = 'telemetry:slow_queries';
+const TELEMETRY_MAX_ENTRIES = 500;
+
 // ==========================================
 // CONNECTION POOL
 // ==========================================
@@ -27,6 +44,8 @@ const pool = new Pool({
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 30000, // Matching connect_timeout=30
+    // Modular schemas: search_path makes tables resolvable without schema prefix
+    options: '-c search_path=core,marketplace,wave,biz,academy,public',
 });
 
 // Log connection status
@@ -53,11 +72,43 @@ export async function query(text, params = []) {
     try {
         const result = await pool.query(text, params);
         const duration = Date.now() - start;
-        console.log(`📊 Query executed in ${duration}ms`);
+
+        // Telemetry: log slow queries to Redis (non-blocking)
+        if (duration > SLOW_QUERY_THRESHOLD_MS) {
+            console.warn(`🐢 Slow query (${duration}ms): ${text.substring(0, 80)}...`);
+            logSlowQuery(text, duration, params.length).catch(() => { });
+        }
+
         return result;
     } catch (error) {
-        console.error('❌ Query error:', error.message);
+        const duration = Date.now() - start;
+        console.error(`❌ Query error (${duration}ms):`, error.message);
+        logSlowQuery(text, duration, params.length, error.message).catch(() => { });
         throw error;
+    }
+}
+
+/**
+ * Log a slow query to Redis for telemetry dashboard.
+ * Fire-and-forget — never blocks the main request.
+ */
+async function logSlowQuery(sql, durationMs, paramCount, error = null) {
+    try {
+        const cmd = await getRedisCommand();
+        if (!cmd) return;
+
+        const entry = JSON.stringify({
+            sql: sql.substring(0, 200),
+            duration_ms: durationMs,
+            params_count: paramCount,
+            error: error || null,
+            timestamp: new Date().toISOString(),
+        });
+
+        await cmd('LPUSH', TELEMETRY_KEY, entry);
+        await cmd('LTRIM', TELEMETRY_KEY, '0', String(TELEMETRY_MAX_ENTRIES - 1));
+    } catch {
+        // Silently fail — telemetry should never crash the app
     }
 }
 

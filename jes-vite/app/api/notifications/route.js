@@ -22,7 +22,7 @@ export async function GET(request) {
                 u.avatar_url as actor_avatar,
                 sp.content as post_content
              FROM notifications n
-             JOIN users u ON n.actor_id = u.id
+             LEFT JOIN users u ON n.actor_id = u.id
              LEFT JOIN social_posts sp ON n.post_id = sp.id
              WHERE n.user_id = $1
              ORDER BY n.created_at DESC
